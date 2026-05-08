@@ -96,7 +96,7 @@ local function must_load_lockfile()
   local lock, err = lockfile_mod.load()
   if not lock then
     fail("error: cannot load lockfile: " .. (err or "?"))
-    os.exit(1)
+    return
   end
   return lock
 end
@@ -105,7 +105,7 @@ local function must_load_sources()
   local sources, err = source_mod.load()
   if not sources then
     fail("error: cannot load sources: " .. (err or "?"))
-    os.exit(1)
+    return
   end
   if #sources == 0 then
     warn("warning: no sources configured. Add one with: allay source add <user/repo>")
@@ -121,7 +121,7 @@ function commands.install(args)
     fail("error: missing package name")
     info("usage: allay install <package>[@<version>] [--yes] [--allow-scripts]")
     info("       allay install gh:user/repo[@ref]   # bundle install from GitHub")
-    os.exit(1)
+    return
   end
 
   local lock = must_load_lockfile()
@@ -148,7 +148,7 @@ function commands.install(args)
     local pkg, source, info_data, err = github.bundle(request_name, known)
     if not pkg then
       fail("error: " .. (err or "github bundle failed"))
-      os.exit(1)
+      return
     end
 
     info(string.format("Bundle: %s (%d files, %d deps detected)",
@@ -176,7 +176,7 @@ function commands.install(args)
   })
   if not plan then
     fail("error: " .. err)
-    os.exit(1)
+    return
   end
 
   if #plan == 0 then
@@ -187,7 +187,7 @@ function commands.install(args)
   local conflict_ok, conflict_err = resolver.check_conflicts(plan, lock)
   if not conflict_ok then
     fail("error: " .. conflict_err)
-    os.exit(1)
+    return
   end
 
   -- Show plan.
@@ -199,13 +199,13 @@ function commands.install(args)
 
   if not confirm("Continue?", { yes_flag = args.flags.yes }) then
     info("Aborted.")
-    os.exit(0)
+    return
   end
 
   local results, install_err = installer.install_plan(plan, lock)
   if not results then
     fail("error: " .. install_err)
-    os.exit(1)
+    return
   end
 
   ok(string.format("Installed %d package%s.", #results,
@@ -245,13 +245,13 @@ end
 function commands.remove(args)
   if not args.package then
     fail("error: missing package name")
-    os.exit(1)
+    return
   end
 
   local lock = must_load_lockfile()
   if not lockfile_mod.is_installed(lock, args.package) then
     fail("error: not installed: " .. args.package)
-    os.exit(1)
+    return
   end
 
   -- Find orphans we'd create.
@@ -282,13 +282,13 @@ function commands.remove(args)
 
   if not confirm("Continue?", { yes_flag = args.flags.yes }) then
     info("Aborted.")
-    os.exit(0)
+    return
   end
 
   local removed_ok, err = installer.remove_package(lock, args.package)
   if not removed_ok then
     fail("error: " .. err)
-    os.exit(1)
+    return
   end
 
   -- Remove orphans if user agrees.
@@ -315,7 +315,7 @@ function commands.update(args)
   if args.package then
     if not lockfile_mod.is_installed(lock, args.package) then
       fail("error: not installed: " .. args.package)
-      os.exit(1)
+      return
     end
     target_names = { args.package }
   else
@@ -360,7 +360,7 @@ function commands.update(args)
 
   if not confirm("Continue?", { yes_flag = args.flags.yes }) then
     info("Aborted.")
-    os.exit(0)
+    return
   end
 
   -- Reinstall by removing and re-installing each upgrade.
@@ -374,7 +374,7 @@ function commands.update(args)
     local res, err = installer.install_plan(plan, lock)
     if not res then
       fail("error: " .. err)
-      os.exit(1)
+      return
     end
   end
 
@@ -410,7 +410,7 @@ end
 function commands.search(args)
   if not args.query then
     fail("error: missing search query")
-    os.exit(1)
+    return
   end
 
   local sources = must_load_sources()
@@ -442,7 +442,7 @@ end
 function commands.info(args)
   if not args.package then
     fail("error: missing package name")
-    os.exit(1)
+    return
   end
 
   local lock = must_load_lockfile()
@@ -468,7 +468,7 @@ function commands.info(args)
   local pkg, source = resolver.find_package(args.package, sources, {})
   if not pkg then
     fail("error: package not found: " .. args.package)
-    os.exit(1)
+    return
   end
 
   info(args.package)
@@ -491,23 +491,23 @@ function commands.source(args)
   if sub == "add" then
     if not args.repo then
       fail("error: missing repository")
-      os.exit(1)
+      return
     end
     local entry, err = source_mod.add(args.repo)
     if not entry then
       fail("error: " .. err)
-      os.exit(1)
+      return
     end
     ok("Added source: " .. entry.id .. " -> " .. entry.url)
   elseif sub == "remove" then
     if not args.repo then
       fail("error: missing repository")
-      os.exit(1)
+      return
     end
     local removed_ok, err = source_mod.remove(args.repo)
     if not removed_ok then
       fail("error: " .. err)
-      os.exit(1)
+      return
     end
     ok("Removed source: " .. args.repo)
   elseif sub == "list" then
@@ -521,7 +521,7 @@ function commands.source(args)
     end
   else
     fail("error: unknown source subcommand: " .. tostring(sub))
-    os.exit(1)
+    return
   end
 end
 
@@ -556,7 +556,7 @@ function commands.init(args)
   local target_path = target .. "/allay.lua"
   if pathkit.exists(target_path) then
     fail("error: " .. target_path .. " already exists")
-    os.exit(1)
+    return
   end
 
   pathkit.write_atomic(target_path, skeleton)
@@ -597,7 +597,7 @@ function commands.doctor(_)
       #lockfile_mod.installed_packages(lock) == 1 and "" or "s"))
   else
     fail(string.format("%d issue%s found.", issues, issues == 1 and "" or "s"))
-    os.exit(1)
+    return
   end
 end
 
@@ -607,12 +607,12 @@ end
 function commands.reinstall(args)
   if not args.package then
     fail("error: missing package name")
-    os.exit(1)
+    return
   end
   local lock = must_load_lockfile()
   if not lockfile_mod.is_installed(lock, args.package) then
     fail("error: not installed: " .. args.package)
-    os.exit(1)
+    return
   end
   installer.remove_package(lock, args.package)
   args.flags.reinstall = true
@@ -655,13 +655,13 @@ end
 function commands.why(args)
   if not args.package then
     fail("error: missing package name")
-    os.exit(1)
+    return
   end
   local lock = must_load_lockfile()
   local entry = lock.packages[args.package]
   if not entry then
     fail("error: not installed: " .. args.package)
-    os.exit(1)
+    return
   end
 
   if entry.manual then
@@ -703,7 +703,7 @@ function commands.scout(args)
     fail("error: missing target")
     info("usage: allay scout gh:user/repo[@ref]")
     info("       allay scout user/repo")
-    os.exit(1)
+    return
   end
 
   local sources = source_mod.load() or {}
@@ -719,7 +719,7 @@ function commands.scout(args)
   local pkg, source, info_data, err = github.bundle(args.target, known)
   if not pkg then
     fail("error: " .. (err or "scout failed"))
-    os.exit(1)
+    return
   end
 
   -- Pretty-print the synthesized allay.lua.
@@ -926,7 +926,7 @@ local function main(argv)
     else
       info("Run `allay help` for the command list.")
     end
-    os.exit(1)
+    return
   end
 
   return handler(args)
