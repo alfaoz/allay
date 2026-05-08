@@ -311,21 +311,25 @@ function M.synthesize(user, repo, ref, tree, opts)
   -- 1. Detect a dominant lib-source subdirectory. Many CC libs organize
   -- their modules under a subdir whose name is the lib's intended namespace
   -- (ccryptolib/, ecnet2/, etc.). When such a subdir holds most of the
-  -- repo's Lua files, we:
+  -- repo's lib-kind Lua files, we:
   --   - Use that subdir name as the package name (overriding the repo
   --     name), since it reflects what `require("...")` calls expect.
   --   - Strip the subdir prefix from dest paths, so files land at
   --     /usr/allay/lib/<subdir>/random.lua not /<subdir>/<subdir>/random.lua.
-  -- Skip-categorized subdirs (test, spec, build, examples, etc.) don't count.
+  -- Only LIB-kind files count (so bin-heavy repos don't get misnamed
+  -- "bin"). Root-level lib files count too (so Pine3D, with 4 root files
+  -- and 4 in converter/, doesn't get its package renamed to "converter").
   local subdir_counts = {}
   local total_eligible = 0
   for _, entry in ipairs(tree) do
-    if entry.type == "blob" and entry.path:lower():match("%.lua$")
-       and M.categorize(entry.path, pkg_name) ~= "skip" then
-      local subdir = entry.path:match("^([^/]+)/")
-      if subdir then
-        subdir_counts[subdir] = (subdir_counts[subdir] or 0) + 1
+    if entry.type == "blob" and entry.path:lower():match("%.lua$") then
+      local kind = M.categorize(entry.path, pkg_name)
+      if kind == "lib" then
         total_eligible = total_eligible + 1
+        local subdir = entry.path:match("^([^/]+)/")
+        if subdir then
+          subdir_counts[subdir] = (subdir_counts[subdir] or 0) + 1
+        end
       end
     end
   end

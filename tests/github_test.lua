@@ -266,6 +266,26 @@ local flat_pkg, _ = github.synthesize("foo", "bar", "main", flat_tree, {})
 check("no subdir to strip: main.lua", "main.lua",
   flat_pkg.files.lib and flat_pkg.files.lib["main.lua"])
 
+-- Mixed root + subdir (Pine3D pattern): half the files at root, half in a
+-- subdir. Should NOT promote the subdir to package name.
+local pine_tree = {
+  { path = "Pine3D.lua",                 type = "blob", size = 100 },
+  { path = "betterblittle.lua",          type = "blob", size = 100 },
+  { path = "noise.lua",                  type = "blob", size = 100 },
+  { path = "Mountains.lua",              type = "blob", size = 100 },
+  { path = "converter/bitmap.lua",       type = "blob", size = 100 },
+  { path = "converter/bmpConverter.lua", type = "blob", size = 100 },
+  { path = "converter/objConverter.lua", type = "blob", size = 100 },
+  { path = "converter/objLoader.lua",    type = "blob", size = 100 },
+}
+local pine_pkg = github.synthesize("Xella37", "Pine3D", "main", pine_tree, {})
+check("mixed root/subdir: pkg name stays repo-derived", "pine3d", pine_pkg.name)
+check("mixed root/subdir: Pine3D.lua kept at root", "Pine3D.lua",
+  pine_pkg.files.lib and pine_pkg.files.lib["Pine3D.lua"])
+check("mixed root/subdir: converter file kept with full path",
+  "converter/bitmap.lua",
+  pine_pkg.files.lib and pine_pkg.files.lib["converter/bitmap.lua"])
+
 -- Dominant subdir differs from repo name (the ecnet case): use the subdir
 -- as the package name so require() resolves the lib's actual namespace.
 local ecnet_tree = {
