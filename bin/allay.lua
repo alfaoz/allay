@@ -541,6 +541,27 @@ function commands.source(args)
     end
     local fmt = entry.format and ("  [" .. entry.format .. "]") or ""
     ok("Added source: " .. entry.id .. " -> " .. entry.url .. fmt)
+
+    -- Sanity-check the new source: try to fetch its index. Failures don't
+    -- revoke the entry (legit blind-mode sources publish no index, e.g.
+    -- unicornpkg-style github.io hosts), but the user gets a clear hint
+    -- about what was reachable so they don't silently typo a name.
+    local idx, idx_err = with_spinner("checking " .. entry.id, function()
+      return index_mod.fetch(entry)
+    end)
+    if idx then
+      local count = 0
+      for _ in pairs(idx.packages or {}) do count = count + 1 end
+      info(string.format("  index ok: %s (%d packages)",
+        idx.name or entry.id, count))
+    elseif idx_err == "blind" then
+      warn("  no index.lua at this source -- packages will resolve in blind mode")
+      warn("  (this is normal for translator sources like unicornpkg, but if you")
+      warn("  expected a curated catalog you may have typoed the source.)")
+    else
+      warn("  could not reach the source: " .. tostring(idx_err))
+      warn("  the entry was saved; allay will keep retrying on each install.")
+    end
   elseif sub == "remove" then
     if not args.repo then
       fail("error: missing repository")
@@ -761,7 +782,7 @@ end
 function commands.scout(args)
   if not args.target then
     fail("error: missing target")
-    info("usage: allay scout gh:user/repo[@ref]")
+    info("usage: allay scout gh:user/repo[@ref] [outfile]")
     info("       allay scout user/repo")
     return
   end
@@ -815,7 +836,17 @@ function commands.scout(args)
   table.insert(lines, "}")
   table.insert(lines, "")
 
-  print(table.concat(lines, "\n"))
+  local body = table.concat(lines, "\n")
+  if args.outfile then
+    local write_ok, write_err = pathkit.write_atomic(args.outfile, body)
+    if not write_ok then
+      fail("error: cannot write " .. args.outfile .. ": " .. (write_err or "?"))
+      return
+    end
+    ok("wrote " .. args.outfile .. " (" .. #body .. " bytes)")
+  else
+    print(body)
+  end
 
   if #info_data.unresolved > 0 then
     warn("Note: some require() calls didn't resolve. Review and add deps manually:")
@@ -891,10 +922,12 @@ local DETAILED_HELP = {
     .. "                  fetched from this source are routed through the\n"
     .. "                  matching translator at /usr/allay/translators/.\n"
     .. "                  Currently supported: unicornpkg/v1.0.0",
-  scout = "allay scout gh:user/repo[@ref]\n\n"
+  scout = "allay scout gh:user/repo[@ref] [outfile]\n\n"
     .. "Walk a GitHub repo, classify its files, and print a synthesized\n"
-    .. "allay.lua to stdout. Use this to seed a curated source with a\n"
-    .. "starting-point package definition that you can then refine by hand.\n\n"
+    .. "allay.lua. Without an outfile, prints to stdout. With one, writes\n"
+    .. "the synth there atomically -- handy when piping into a curated\n"
+    .. "source like:\n\n"
+    .. "    allay scout gh:foo/bar /etc/allay/sources/local/bar.lua\n\n"
     .. "Note: dep detection is greedy. Review the unresolved list before\n"
     .. "publishing the synthesized definition.",
 }
@@ -967,6 +1000,7 @@ local function parse_argv(argv)
     args.target = positionals[1]
   elseif cmd == "scout" then
     args.target = positionals[1]
+    args.outfile = positionals[2]
   end
 
   return args
