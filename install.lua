@@ -214,8 +214,104 @@ local function main()
   print()
   info("Configuring...")
   if not fs.exists(LOCKFILE) then
-    write_file(LOCKFILE, INITIAL_LOCK)
-    info("  wrote " .. LOCKFILE)
+    -- Build a lockfile populated with everything we just bootstrapped, so
+    -- `allay list / update / remove` see them as real packages from day one.
+    -- We hash the on-disk content using allay's own hash module, which is
+    -- now available because we just wrote it to /usr/allay/lib/hash/.
+    package.path = "/usr/allay/lib/allay/?.lua;/usr/allay/lib/allay/?/init.lua;"
+                .. "/usr/allay/lib/?/init.lua;/usr/allay/lib/?.lua;"
+                .. package.path
+    local ok_lib, hash_lib = pcall(require, "hash")
+    if not ok_lib then
+      write_file(LOCKFILE, INITIAL_LOCK)
+      warn("  wrote " .. LOCKFILE .. " (empty: hash module not loadable)")
+    else
+      local pkg_to_files = {
+        allay = {
+          version = "0.1.0", source = "alfaoz/allay-core", manual = true,
+          dests = {
+            "/bin/allay.lua",
+            "/usr/allay/lib/allay/source.lua",
+            "/usr/allay/lib/allay/index.lua",
+            "/usr/allay/lib/allay/schema.lua",
+            "/usr/allay/lib/allay/pkg.lua",
+            "/usr/allay/lib/allay/lockfile.lua",
+            "/usr/allay/lib/allay/resolver.lua",
+            "/usr/allay/lib/allay/installer.lua",
+            "/usr/allay/lib/allay/github.lua",
+            "/usr/allay/lib/transport/init.lua",
+            "/usr/allay/lib/transport/https.lua",
+            "/usr/allay/lib/transport/disk.lua",
+          },
+        },
+        hash     = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/hash/init.lua" } },
+        httpkit  = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/httpkit/init.lua" } },
+        pathkit  = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/pathkit/init.lua" } },
+        log      = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/log/init.lua" } },
+        argparse = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/argparse/init.lua" } },
+        ["allay-unicornpkg-compat"] = {
+          version = "1.0.0", source = "alfaoz/allay-core",
+          dests = { "/usr/allay/translators/unicornpkg.lua" },
+        },
+      }
+
+      local lock = { spec = "allay/v1.0.0", packages = {} }
+      for name, meta in pairs(pkg_to_files) do
+        local files = {}
+        for _, dest in ipairs(meta.dests) do
+          local fh = fs.open(dest, "r")
+          local body = fh and fh.readAll() or ""
+          if fh then fh.close() end
+          table.insert(files, {
+            dest = dest,
+            sha256 = hash_lib.sha256hex(body),
+            tofu = true,
+          })
+        end
+        lock.packages[name] = {
+          version = meta.version,
+          source = meta.source,
+          manual = meta.manual == true,
+          pinned = false,
+          dependencies = {},
+          dependents = {},
+          files = files,
+        }
+      end
+
+      -- Serialize and write.
+      local lines = { "{", "  spec = " .. string.format("%q", lock.spec) .. ",",
+                      "  packages = {" }
+      for name, entry in pairs(lock.packages) do
+        table.insert(lines, "    [" .. string.format("%q", name) .. "] = {")
+        table.insert(lines, "      version = " .. string.format("%q", entry.version) .. ",")
+        table.insert(lines, "      source = " .. string.format("%q", entry.source) .. ",")
+        table.insert(lines, "      manual = " .. tostring(entry.manual) .. ",")
+        table.insert(lines, "      pinned = false,")
+        table.insert(lines, "      dependencies = {},")
+        table.insert(lines, "      dependents = {},")
+        table.insert(lines, "      files = {")
+        for _, f in ipairs(entry.files) do
+          table.insert(lines, string.format(
+            "        { dest = %q, sha256 = %q, tofu = true },",
+            f.dest, f.sha256))
+        end
+        table.insert(lines, "      },")
+        table.insert(lines, "    },")
+      end
+      table.insert(lines, "  },")
+      table.insert(lines, "}")
+      table.insert(lines, "")
+      write_file(LOCKFILE, table.concat(lines, "\n"))
+      info("  wrote " .. LOCKFILE
+        .. string.format(" (%d bootstrap packages tracked)",
+          (function() local n=0 for _ in pairs(lock.packages) do n=n+1 end return n end)()))
+    end
   end
 
   if not fs.exists(SOURCES_FILE) then
