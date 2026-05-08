@@ -47,6 +47,10 @@ local function find_package(name, sources, opts)
     name = plain_name
   end
 
+  -- Track which sources were tried with what outcome, for a clear
+  -- not-found message at the end.
+  local tried = {}  -- list of { source = id, status = "no-such-package"|"error", detail = string|nil }
+
   for _, source in ipairs(search_sources) do
     -- Try the index first.
     local idx, idx_err = index_mod.fetch(source)
@@ -57,14 +61,14 @@ local function find_package(name, sources, opts)
       if entry then
         file_path = entry.file or (name .. ".lua")
       else
-        -- Indexed source without this package; skip.
+        table.insert(tried, { source = source.id, status = "no-such-package" })
         goto continue
       end
     elseif idx_err == "blind" then
-      -- Blind source: try by filename directly.
       file_path = name .. ".lua"
     else
       table.insert(errors, string.format("%s: %s", source.id, idx_err or "unknown error"))
+      table.insert(tried, { source = source.id, status = "error", detail = idx_err })
       goto continue
     end
 
@@ -77,22 +81,39 @@ local function find_package(name, sources, opts)
         else
           table.insert(errors, string.format("%s: parse error in %s: %s",
             source.id, file_path, parse_err))
+          table.insert(tried, { source = source.id, status = "error",
+            detail = "parse error" })
         end
       else
-        if fetch_err and not fetch_err:find("404") and not fetch_err:find("not found") then
-          table.insert(errors, string.format("%s: %s", source.id, fetch_err))
+        local lower = (fetch_err or ""):lower()
+        local is_404 = lower:find("404") or lower:find("not found")
+        if is_404 then
+          table.insert(tried, { source = source.id, status = "no-such-package" })
+        else
+          table.insert(errors, string.format("%s: %s", source.id, fetch_err or "?"))
+          table.insert(tried, { source = source.id, status = "error",
+            detail = fetch_err })
         end
-        -- 404 from a blind source = just not here, try next source.
       end
     end
 
     ::continue::
   end
 
-  if #errors > 0 then
-    return nil, nil, "package not found: " .. name .. " (" .. table.concat(errors, "; ") .. ")"
+  -- Build a clear not-found message that lists every source we tried.
+  local lines = { "package not found: " .. name }
+  if #tried > 0 then
+    table.insert(lines, "Searched:")
+    for _, t in ipairs(tried) do
+      if t.status == "no-such-package" then
+        table.insert(lines, "  - " .. t.source .. " (no such package)")
+      else
+        table.insert(lines, "  - " .. t.source .. " ("
+          .. (t.detail or "error") .. ")")
+      end
+    end
   end
-  return nil, nil, "package not found in any source: " .. name
+  return nil, nil, table.concat(lines, "\n")
 end
 
 M.find_package = find_package

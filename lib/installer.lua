@@ -151,8 +151,10 @@ function M.install_plan(plan, lockfile, opts)
     #plan, #plan == 1 and "" or "s"))
 
   local staged = {}
-  for _, item in ipairs(plan) do
-    log.debugf("staging %s", item.name)
+  for i, item in ipairs(plan) do
+    local file_count = 0
+    for _ in pairs(item.package.files or {}) do file_count = file_count + 1 end
+    log.info(string.format("  [%d/%d] %s", i, #plan, item.name))
     local records, err = stage_package(item, staging_dir)
     if not records then
       cleanup_staging()
@@ -161,7 +163,7 @@ function M.install_plan(plan, lockfile, opts)
     staged[item.name] = records
   end
 
-  log.info("Verifying hashes... ok")
+  log.info("Verified.")
 
   -- Phase 2: commit each package's files. We do this package-by-package
   -- so each package is fully present or fully absent.

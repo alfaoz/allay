@@ -325,17 +325,23 @@ function commands.update(args)
     end
   end
 
+  info(string.format("Checking %d package%s for updates...",
+    #target_names, #target_names == 1 and "" or "s"))
+
   local upgrades = {}
-  for _, name in ipairs(target_names) do
+  for i, name in ipairs(target_names) do
     local entry = lock.packages[name]
+    io.write(string.format("  [%d/%d] %s ", i, #target_names, name))
+    io.flush()
     if entry.pinned then
-      log.debugf("%s is pinned; skipping", name)
+      color("yellow", "(pinned)\n")
     else
       local pkg, source = resolver.find_package(name, sources, {})
       if pkg then
         local current = entry.version or "0.0.0"
         local available = pkg.version or "0.0.0"
         if available ~= current then
+          color("yellow", string.format("%s -> %s\n", current, available))
           table.insert(upgrades, {
             name = name,
             current = current,
@@ -343,7 +349,11 @@ function commands.update(args)
             package = pkg,
             source = source,
           })
+        else
+          color("green", "ok\n")
         end
+      else
+        color("red", "not in any source\n")
       end
     end
   end
