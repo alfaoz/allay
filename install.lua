@@ -61,12 +61,15 @@ local DIRECTORIES = {
 }
 
 local STARTUP_FILE = "/startup/00_allay.lua"
--- Use _G.package and _G.shell explicitly. CC: Tweaked runs startup scripts
--- in a sandboxed environment, where `package = ...` would write to the
--- sandbox's local copy and never propagate back to the global table the
--- lua REPL and other programs see. Going through _G bypasses the sandbox.
+-- For `shell`: it lives only in the script's local sandbox, not on _G.
+-- For `package`: writing to plain `package.path` modifies the sandbox's
+-- private copy, so the patch is lost when the script returns. Going
+-- through _G.package mutates the global table the REPL and other programs
+-- actually see.
 local STARTUP_CONTENT = [[-- allay path setup.
-_G.shell.setPath("/bin:" .. _G.shell.path())
+if shell and shell.setPath then
+  shell.setPath("/bin:" .. shell.path())
+end
 _G.package.path = "/usr/allay/lib/allay/?.lua;/usr/allay/lib/allay/?/init.lua;"
               .. "/usr/allay/lib/?/init.lua;/usr/allay/lib/?.lua;"
               .. _G.package.path
