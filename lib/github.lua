@@ -238,6 +238,9 @@ function M.categorize(path, repo_name)
   if lower:match("/test[s]?/") or lower:match("^test[s]?/") or lower:match("_test%.") then
     return "skip"
   end
+  if lower:match("/spec[s]?/") or lower:match("^spec[s]?/") or lower:match("_spec%.") then
+    return "skip"
+  end
   if lower:match("/example[s]?/") or lower:match("^example[s]?/") then
     return "skip"
   end
@@ -305,7 +308,37 @@ function M.synthesize(user, repo, ref, tree, opts)
   local pkg_name = opts.name or repo:lower():gsub("[^%w%-_%.]", "-")
   local base_url = M.raw_base(user, repo, ref)
 
-  -- 1. Categorize files.
+  -- 1. Detect the "files inside <pkgname>/ subdir" pattern. Many CC libs
+  -- organize their module files under a subdirectory matching the lib's
+  -- name (ccryptolib/random.lua, etc.). If the dominant Lua subdir matches
+  -- our package name, strip that prefix when building dest_names so files
+  -- land at /usr/allay/lib/<pkg>/random.lua instead of
+  -- /usr/allay/lib/<pkg>/<pkg>/random.lua.
+  local subdir_counts = {}
+  local total_lua = 0
+  for _, entry in ipairs(tree) do
+    if entry.type == "blob" and entry.path:lower():match("%.lua$") then
+      local subdir = entry.path:match("^([^/]+)/")
+      if subdir then
+        subdir_counts[subdir:lower()] = (subdir_counts[subdir:lower()] or 0) + 1
+        total_lua = total_lua + 1
+      end
+    end
+  end
+  local strip_prefix = nil
+  local matches = subdir_counts[pkg_name:lower()] or 0
+  if total_lua > 0 and matches / total_lua > 0.5 then
+    -- Find the actual case-preserved prefix to strip.
+    for _, entry in ipairs(tree) do
+      local subdir = entry.path:match("^([^/]+)/")
+      if subdir and subdir:lower() == pkg_name:lower() then
+        strip_prefix = subdir .. "/"
+        break
+      end
+    end
+  end
+
+  -- 2. Categorize files.
   local kinds = { lib = {}, bin = {}, startup = {}, share = {} }
   local skipped = {}
   local lua_blobs = {}  -- src_path → kind, for require-scanning
@@ -317,6 +350,10 @@ function M.synthesize(user, repo, ref, tree, opts)
         table.insert(skipped, entry.path)
       else
         local dest = dest_name_for(kind, entry.path)
+        if strip_prefix and kind == "lib"
+           and entry.path:sub(1, #strip_prefix) == strip_prefix then
+          dest = entry.path:sub(#strip_prefix + 1)
+        end
         kinds[kind][entry.path] = dest
         if entry.path:lower():match("%.lua$") then
           lua_blobs[entry.path] = kind

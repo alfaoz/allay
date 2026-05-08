@@ -235,6 +235,38 @@ check("rate limit error mentions GITHUB_TOKEN",
 package.loaded.transport.fetch = original_fetch
 
 -- ---------------------------------------------------------------------------
+-- Subdir-strip heuristic: files inside <pkgname>/ get the prefix stripped
+-- ---------------------------------------------------------------------------
+
+local nested_tree = {
+  { path = "ccryptolib/random.lua",        type = "blob", size = 100 },
+  { path = "ccryptolib/aead.lua",          type = "blob", size = 100 },
+  { path = "ccryptolib/internal/sha.lua",  type = "blob", size = 100 },
+  { path = "spec/aead_spec.lua",           type = "blob", size = 100 },
+  { path = "README.md",                    type = "blob", size = 100 },
+}
+local nested_pkg, _ = github.synthesize("migeyel", "ccryptolib", "main",
+  nested_tree, {})
+
+check("subdir strip: random.lua", "random.lua",
+  nested_pkg.files.lib and nested_pkg.files.lib["ccryptolib/random.lua"])
+check("subdir strip: aead.lua", "aead.lua",
+  nested_pkg.files.lib and nested_pkg.files.lib["ccryptolib/aead.lua"])
+check("subdir strip: nested internal", "internal/sha.lua",
+  nested_pkg.files.lib and nested_pkg.files.lib["ccryptolib/internal/sha.lua"])
+check("subdir strip: spec files skipped (matches /spec/ pattern)", nil,
+  nested_pkg.files.lib and nested_pkg.files.lib["spec/aead_spec.lua"])
+
+-- Without a matching subdir, files keep their paths as-is.
+local flat_tree = {
+  { path = "main.lua", type = "blob", size = 100 },
+  { path = "util.lua", type = "blob", size = 100 },
+}
+local flat_pkg, _ = github.synthesize("foo", "bar", "main", flat_tree, {})
+check("no subdir to strip: main.lua", "main.lua",
+  flat_pkg.files.lib and flat_pkg.files.lib["main.lua"])
+
+-- ---------------------------------------------------------------------------
 -- Done
 -- ---------------------------------------------------------------------------
 
