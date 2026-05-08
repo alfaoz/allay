@@ -32,6 +32,10 @@ local CORE_FILES = {
   { BASE .. "/lib/transport/https.lua",        "/usr/allay/lib/transport/https.lua" },
   { BASE .. "/lib/transport/disk.lua",         "/usr/allay/lib/transport/disk.lua" },
 
+  -- Path-setup helper for user code: `dofile("/usr/allay/setup.lua")`
+  -- prepends allay's lib dirs to the caller's package.path.
+  { BASE .. "/setup.lua",                      "/usr/allay/setup.lua" },
+
   -- Core libs (allay's own deps).
   { CORE_BASE .. "/hash/init.lua",             "/usr/allay/lib/hash/init.lua" },
   { CORE_BASE .. "/httpkit/init.lua",          "/usr/allay/lib/httpkit/init.lua" },
@@ -257,6 +261,7 @@ local function main()
             "/usr/allay/lib/transport/init.lua",
             "/usr/allay/lib/transport/https.lua",
             "/usr/allay/lib/transport/disk.lua",
+            "/usr/allay/setup.lua",
           },
         },
         hash     = { version = "1.0.0", source = "alfaoz/allay-core",
