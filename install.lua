@@ -61,18 +61,26 @@ local DIRECTORIES = {
 }
 
 local STARTUP_FILE = "/startup/00_allay.lua"
--- For `shell`: it lives only in the script's local sandbox, not on _G.
--- For `package`: writing to plain `package.path` modifies the sandbox's
--- private copy, so the patch is lost when the script returns. Going
--- through _G.package mutates the global table the REPL and other programs
--- actually see.
+-- The startup file does only what's portable across CC's per-program env
+-- model: prepend /bin to the shell path so `allay` is callable. Each
+-- program (allay's CLI, the lua REPL, user code) gets its own `package`
+-- in CC: Tweaked, so a global package.path mutation here would not
+-- propagate. User programs that want to require allay's libs must set
+-- up package.path themselves at the top of the program.
 local STARTUP_CONTENT = [[-- allay path setup.
 if shell and shell.setPath then
   shell.setPath("/bin:" .. shell.path())
 end
-_G.package.path = "/usr/allay/lib/allay/?.lua;/usr/allay/lib/allay/?/init.lua;"
-              .. "/usr/allay/lib/?/init.lua;/usr/allay/lib/?.lua;"
-              .. _G.package.path
+-- Best-effort: also try the require.path setting, which some CC: Tweaked
+-- builds use to seed each program's package.path. Harmless if unused.
+if settings and settings.set then
+  local extra = "/usr/allay/lib/allay/?.lua;/usr/allay/lib/allay/?/init.lua;"
+             .. "/usr/allay/lib/?/init.lua;/usr/allay/lib/?.lua;"
+  pcall(function()
+    settings.set("require.path",
+      extra .. (settings.get("require.path") or ""))
+  end)
+end
 ]]
 
 local SOURCES_FILE = "/etc/allay/sources.lua"
