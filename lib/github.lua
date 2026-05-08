@@ -308,34 +308,45 @@ function M.synthesize(user, repo, ref, tree, opts)
   local pkg_name = opts.name or repo:lower():gsub("[^%w%-_%.]", "-")
   local base_url = M.raw_base(user, repo, ref)
 
-  -- 1. Detect the "files inside <pkgname>/ subdir" pattern. Many CC libs
-  -- organize their module files under a subdirectory matching the lib's
-  -- name (ccryptolib/random.lua, etc.). If the dominant Lua subdir matches
-  -- our package name, strip that prefix when building dest_names so files
-  -- land at /usr/allay/lib/<pkg>/random.lua instead of
-  -- /usr/allay/lib/<pkg>/<pkg>/random.lua.
+  -- 1. Detect a dominant lib-source subdirectory. Many CC libs organize
+  -- their modules under a subdir whose name is the lib's intended namespace
+  -- (ccryptolib/, ecnet2/, etc.). When such a subdir holds most of the
+  -- repo's Lua files, we:
+  --   - Use that subdir name as the package name (overriding the repo
+  --     name), since it reflects what `require("...")` calls expect.
+  --   - Strip the subdir prefix from dest paths, so files land at
+  --     /usr/allay/lib/<subdir>/random.lua not /<subdir>/<subdir>/random.lua.
+  -- Skip-categorized subdirs (test, spec, build, examples, etc.) don't count.
   local subdir_counts = {}
-  local total_lua = 0
+  local total_eligible = 0
   for _, entry in ipairs(tree) do
-    if entry.type == "blob" and entry.path:lower():match("%.lua$") then
+    if entry.type == "blob" and entry.path:lower():match("%.lua$")
+       and M.categorize(entry.path, pkg_name) ~= "skip" then
       local subdir = entry.path:match("^([^/]+)/")
       if subdir then
-        subdir_counts[subdir:lower()] = (subdir_counts[subdir:lower()] or 0) + 1
-        total_lua = total_lua + 1
+        subdir_counts[subdir] = (subdir_counts[subdir] or 0) + 1
+        total_eligible = total_eligible + 1
       end
     end
   end
-  local strip_prefix = nil
-  local matches = subdir_counts[pkg_name:lower()] or 0
-  if total_lua > 0 and matches / total_lua > 0.5 then
-    -- Find the actual case-preserved prefix to strip.
-    for _, entry in ipairs(tree) do
-      local subdir = entry.path:match("^([^/]+)/")
-      if subdir and subdir:lower() == pkg_name:lower() then
-        strip_prefix = subdir .. "/"
-        break
-      end
+  local strip_prefix, dominant_subdir = nil, nil
+  if total_eligible > 0 then
+    -- Pick the largest subdir.
+    local best_name, best_count = nil, 0
+    for name, count in pairs(subdir_counts) do
+      if count > best_count then best_name, best_count = name, count end
     end
+    if best_name and (best_count / total_eligible) > 0.5 then
+      strip_prefix = best_name .. "/"
+      dominant_subdir = best_name
+    end
+  end
+
+  -- If a dominant subdir was found and it differs from the repo name, prefer
+  -- it as the package name (the subdir is usually the lib's intended
+  -- require namespace).
+  if dominant_subdir and dominant_subdir:lower() ~= pkg_name:lower() then
+    pkg_name = dominant_subdir:lower():gsub("[^%w%-_%.]", "-")
   end
 
   -- 2. Categorize files.

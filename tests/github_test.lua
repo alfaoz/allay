@@ -266,6 +266,24 @@ local flat_pkg, _ = github.synthesize("foo", "bar", "main", flat_tree, {})
 check("no subdir to strip: main.lua", "main.lua",
   flat_pkg.files.lib and flat_pkg.files.lib["main.lua"])
 
+-- Dominant subdir differs from repo name (the ecnet case): use the subdir
+-- as the package name so require() resolves the lib's actual namespace.
+local ecnet_tree = {
+  { path = "ecnet2/init.lua",       type = "blob", size = 100 },
+  { path = "ecnet2/connection.lua", type = "blob", size = 100 },
+  { path = "ecnet2/identity.lua",   type = "blob", size = 100 },
+  { path = "examples/foo.lua",      type = "blob", size = 100 },
+  { path = "README.md",             type = "blob", size = 100 },
+}
+local ecnet_pkg = github.synthesize("migeyel", "ecnet", "main", ecnet_tree, {})
+check("subdir name overrides repo name: pkg.name", "ecnet2", ecnet_pkg.name)
+check("subdir name overrides: stripped init.lua", "init.lua",
+  ecnet_pkg.files.lib and ecnet_pkg.files.lib["ecnet2/init.lua"])
+check("subdir name overrides: stripped connection.lua", "connection.lua",
+  ecnet_pkg.files.lib and ecnet_pkg.files.lib["ecnet2/connection.lua"])
+check("subdir name overrides: examples skipped", nil,
+  ecnet_pkg.files.lib and ecnet_pkg.files.lib["examples/foo.lua"])
+
 -- ---------------------------------------------------------------------------
 -- Done
 -- ---------------------------------------------------------------------------
