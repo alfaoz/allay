@@ -305,6 +305,39 @@ check("subdir name overrides: examples skipped", nil,
   ecnet_pkg.files.lib and ecnet_pkg.files.lib["examples/foo.lua"])
 
 -- ---------------------------------------------------------------------------
+-- bundle(): source.id must embed the ref so `allay update` can re-walk
+-- the originally-installed ref. Default-branch bundles still record an
+-- explicit "@<resolved-ref>" segment to make the lockfile unambiguous.
+-- ---------------------------------------------------------------------------
+_G._http_responses["https://api.github.com/repos/foo/bar/git/trees/main?recursive=1"] = [[
+{ "tree": [
+    { "path": "init.lua", "type": "blob", "size": 100 }
+  ]
+}
+]]
+_G._http_responses["https://raw.githubusercontent.com/foo/bar/main/init.lua"] = "return {}\n"
+
+local bun_pkg, bun_source, bun_info, bun_err = github.bundle("gh:foo/bar")
+check("bundle: ok", true, bun_pkg ~= nil and bun_source ~= nil)
+check("bundle: source.id includes ref", "gh:foo/bar@main",
+  bun_source and bun_source.id)
+check("bundle: source.url uses ref", "https://raw.githubusercontent.com/foo/bar/main",
+  bun_source and bun_source.url)
+
+-- An explicit ref flows through unchanged.
+_G._http_responses["https://api.github.com/repos/foo/bar/git/trees/v1.2.3?recursive=1"] = [[
+{ "tree": [
+    { "path": "init.lua", "type": "blob", "size": 100 }
+  ]
+}
+]]
+_G._http_responses["https://raw.githubusercontent.com/foo/bar/v1.2.3/init.lua"] = "return {}\n"
+
+local _, ref_source = github.bundle("gh:foo/bar@v1.2.3")
+check("bundle: explicit ref kept in source.id", "gh:foo/bar@v1.2.3",
+  ref_source and ref_source.id)
+
+-- ---------------------------------------------------------------------------
 -- Done
 -- ---------------------------------------------------------------------------
 

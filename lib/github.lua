@@ -486,8 +486,12 @@ function M.bundle(spec, known_packages)
     end,
   })
 
+  -- Embed the resolved ref in source.id so the lockfile records what to
+  -- re-walk during `allay update`. Update parses the ref back out via
+  -- M.parse(spec) and re-fetches that exact ref. For pinned tags the
+  -- re-walk is a no-op; for branches it pulls the latest tip.
   local source = {
-    id = M.SCHEME .. parsed.user .. "/" .. parsed.repo,
+    id = M.SCHEME .. parsed.user .. "/" .. parsed.repo .. "@" .. ref,
     url = M.raw_base(parsed.user, parsed.repo, ref),
     bundle = true,
   }

@@ -45,10 +45,29 @@ local function find_package(name, sources, opts)
     return entry.pkg, entry.source
   end
 
+  -- Restrict candidates to a specific source if requested. Used by `allay
+  -- update` to pin lookups to the source recorded in the lockfile so a
+  -- package never gets silently swapped for a same-named one in another
+  -- source. The user-typed qualifier syntax (alfaoz:hash) does the same
+  -- thing, but at parse-time on the package name; opts.from_source is the
+  -- programmatic equivalent for code that already has the source id.
+  local search_sources = sources
+  if opts.from_source then
+    search_sources = {}
+    for _, s in ipairs(sources) do
+      if s.id == opts.from_source or s.url == opts.from_source then
+        table.insert(search_sources, s)
+        break
+      end
+    end
+    if #search_sources == 0 then
+      return nil, nil, "source not configured: " .. opts.from_source
+    end
+  end
+
   -- If a source qualifier was given (alfaoz:hash), restrict to that source.
   local qualified_source, plain_name = name:match("^([^:]+):(.+)$")
-  local search_sources = sources
-  if qualified_source then
+  if qualified_source and not opts.from_source then
     search_sources = {}
     for _, s in ipairs(sources) do
       if s.id == qualified_source or s.url == qualified_source then

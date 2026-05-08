@@ -320,6 +320,49 @@ check("foreign-format source preserved", "foreign/main",
 os.execute("rm -rf '" .. TRANS_DIR .. "'")
 _G.fs.exists = prev_fs_exists
 
+-- ---------------------------------------------------------------------------
+-- opts.from_source: source-stable lookups for `allay update`.
+-- Two sources both serve a package named "twin". find_package without
+-- from_source picks whichever comes first; with from_source it sticks to
+-- the named source even if it's listed second.
+-- ---------------------------------------------------------------------------
+local source_a = { id = "alfaoz/a", url = "https://a.example.com" }
+local source_b = { id = "alfaoz/b", url = "https://b.example.com" }
+local two_sources = { source_a, source_b }
+
+http_responses["https://a.example.com/index.lua"] = [[{
+  spec = "allay/v1.0.0",
+  packages = { twin = { version = "1.0.0" } },
+}]]
+http_responses["https://b.example.com/index.lua"] = [[{
+  spec = "allay/v1.0.0",
+  packages = { twin = { version = "2.0.0" } },
+}]]
+http_responses["https://a.example.com/twin.lua"] = [[return {
+  name = "twin", base_url = "u", version = "1.0.0",
+  files = { lib = { ["init.lua"] = "init.lua" } },
+}]]
+http_responses["https://b.example.com/twin.lua"] = [[return {
+  name = "twin", base_url = "u", version = "2.0.0",
+  files = { lib = { ["init.lua"] = "init.lua" } },
+}]]
+
+local pkg_default, src_default = resolver.find_package("twin", two_sources, {})
+check("default lookup picks first source", "alfaoz/a", src_default and src_default.id)
+check("default lookup version", "1.0.0", pkg_default and pkg_default.version)
+
+local pkg_pinned, src_pinned = resolver.find_package("twin", two_sources, {
+  from_source = "alfaoz/b",
+})
+check("from_source pins to b", "alfaoz/b", src_pinned and src_pinned.id)
+check("from_source version follows b", "2.0.0", pkg_pinned and pkg_pinned.version)
+
+local _, _, missing_src_err = resolver.find_package("twin", two_sources, {
+  from_source = "alfaoz/nope",
+})
+check("from_source unknown surfaces clear error", true,
+  missing_src_err ~= nil and missing_src_err:find("not configured") ~= nil)
+
 print()
 print(string.format("resolver: %d/%d tests passed", total - failed, total))
 if failed > 0 then os.exit(1) end

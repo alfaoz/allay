@@ -113,6 +113,72 @@ local function must_load_sources()
   return sources
 end
 
+-- Build the set of package names known to the configured sources. Used by
+-- gh: bundle's external_resolver so internal vs external require()s get
+-- classified correctly. Quiet on failure; an unreachable source just means
+-- fewer hits in the known set.
+local function build_known(sources)
+  local known = {}
+  for _, source in ipairs(sources) do
+    local idx = index_mod.fetch(source)
+    if idx and idx.packages then
+      for n in pairs(idx.packages) do known[n] = true end
+    end
+  end
+  return known
+end
+
+-- Look up the upgrade-source pkg/source pair for a lockfile entry. Routes
+-- gh:user/repo[@ref] entries through the bundle path and regular entries
+-- through the resolver, restricted to the recorded source so a package
+-- isn't silently swapped for a same-named one in another configured source.
+--
+-- Returns (pkg, source, info, err). info.kind is "gh" or "regular".
+-- For gh: kind, info.fetch_cache holds bodies the bundle pre-fetched.
+local function lookup_for_upgrade(name, entry, sources, known)
+  local source_id = entry.source or ""
+  if source_id:sub(1, #github.SCHEME) == github.SCHEME then
+    local pkg, source, bundle_info, err = github.bundle(source_id, known)
+    if not pkg then return nil, nil, nil, err end
+    return pkg, source, {
+      kind = "gh",
+      fetch_cache = bundle_info and bundle_info.fetch_cache,
+      bundle_info = bundle_info,
+    }
+  end
+  local pkg, source, err = resolver.find_package(name, sources, {
+    from_source = source_id,
+  })
+  if not pkg then return nil, nil, nil, err end
+  return pkg, source, { kind = "regular" }
+end
+
+-- Compare a freshly-bundled gh: package's file hashes against what the
+-- lockfile entry recorded. Returns true when the files on disk match the
+-- bundled output -- i.e., upstream hasn't changed and `update` can skip
+-- this package. fetch_cache contains the bodies pulled during the bundle
+-- walk, so this check is local-only (no extra network round trips).
+local function gh_unchanged(pkg, fetch_cache, entry)
+  if not entry.files or #entry.files == 0 then return false end
+
+  local lock_hashes = {}
+  for _, f in ipairs(entry.files) do
+    lock_hashes[f.dest] = f.sha256 and f.sha256:lower() or ""
+  end
+
+  local seen = 0
+  for _, fi in ipairs(pkg_mod.iter_files(pkg)) do
+    seen = seen + 1
+    local body = fi.inline or (fetch_cache and fetch_cache[fi.src_path])
+    if not body then return false end
+    local actual = hash.sha256hex(body):lower()
+    if lock_hashes[fi.dest_path] ~= actual then return false end
+  end
+
+  -- File-count mismatch (added or removed file) counts as a change.
+  return seen == #entry.files
+end
+
 -- ---------------------------------------------------------------------------
 -- install
 -- ---------------------------------------------------------------------------
@@ -132,20 +198,11 @@ function commands.install(args)
   -- like any other package.
   local synthesized = {}
   local request_name = args.package
-  if request_name:sub(1, 3) == "gh:" then
+  if request_name:sub(1, #github.SCHEME) == github.SCHEME then
     info("Walking " .. request_name .. "...")
 
-    -- Build a known-package set from configured sources for greedy dep
-    -- detection. Failures to fetch a source's index don't block the bundle.
-    local known = {}
-    for _, source in ipairs(sources) do
-      local idx = index_mod.fetch(source)
-      if idx and idx.packages then
-        for n in pairs(idx.packages) do known[n] = true end
-      end
-    end
-
-    local pkg, source, info_data, err = github.bundle(request_name, known)
+    local pkg, source, info_data, err = github.bundle(
+      request_name, build_known(sources))
     if not pkg then
       fail("error: " .. (err or "github bundle failed"))
       return
@@ -328,6 +385,7 @@ function commands.update(args)
   info(string.format("Checking %d package%s for updates...",
     #target_names, #target_names == 1 and "" or "s"))
 
+  local known = build_known(sources)
   local upgrades = {}
   for i, name in ipairs(target_names) do
     local entry = lock.packages[name]
@@ -336,8 +394,25 @@ function commands.update(args)
     if entry.pinned then
       color("yellow", "(pinned)\n")
     else
-      local pkg, source = resolver.find_package(name, sources, {})
-      if pkg then
+      local pkg, source, lookup_info, err = lookup_for_upgrade(
+        name, entry, sources, known)
+      if not pkg then
+        color("red", (err or "lookup failed") .. "\n")
+      elseif lookup_info.kind == "gh" then
+        if gh_unchanged(pkg, lookup_info.fetch_cache, entry) then
+          color("green", "ok\n")
+        else
+          color("yellow", "(refresh " .. (entry.source or "") .. ")\n")
+          table.insert(upgrades, {
+            name = name,
+            current = entry.version or "0.0.0",
+            target = "(refresh)",
+            package = pkg,
+            source = source,
+            fetch_cache = lookup_info.fetch_cache,
+          })
+        end
+      else
         local current = entry.version or "0.0.0"
         local available = pkg.version or "0.0.0"
         if available ~= current then
@@ -352,8 +427,6 @@ function commands.update(args)
         else
           color("green", "ok\n")
         end
-      else
-        color("red", "not in any source\n")
       end
     end
   end
@@ -380,6 +453,7 @@ function commands.update(args)
     local plan = {{
       name = u.name, package = u.package, source = u.source,
       manual = was_manual, requested_by = nil,
+      fetch_cache = u.fetch_cache,
     }}
     local res, err = installer.install_plan(plan, lock)
     if not res then
@@ -629,7 +703,24 @@ function commands.reinstall(args)
     fail("error: not installed: " .. args.package)
     return
   end
-  installer.remove_package(lock, args.package)
+
+  -- Capture entry before removal so we can reach back for source info.
+  local lock_name = args.package
+  local source_id = (lock.packages[lock_name] or {}).source or ""
+
+  installer.remove_package(lock, lock_name)
+
+  -- Rewrite args.package so the install pipeline pulls from the same place
+  -- the original install came from. For gh: bundles, the source IS the gh:
+  -- spec verbatim (gh:user/repo@ref) so install rewalks via the bundle
+  -- path. For regular sources, prepend the source id as a qualifier so the
+  -- resolver doesn't drift to a same-named package elsewhere.
+  if source_id:sub(1, #github.SCHEME) == github.SCHEME then
+    args.package = source_id
+  elseif source_id ~= "" then
+    args.package = source_id .. ":" .. lock_name
+  end
+
   args.flags.reinstall = true
   return commands.install(args)
 end
@@ -722,16 +813,10 @@ function commands.scout(args)
   end
 
   local sources = source_mod.load() or {}
-  local known = {}
-  for _, source in ipairs(sources) do
-    local idx = index_mod.fetch(source)
-    if idx and idx.packages then
-      for n in pairs(idx.packages) do known[n] = true end
-    end
-  end
 
   info("Walking " .. args.target .. "...")
-  local pkg, source, info_data, err = github.bundle(args.target, known)
+  local pkg, source, info_data, err = github.bundle(
+    args.target, build_known(sources))
   if not pkg then
     fail("error: " .. (err or "scout failed"))
     return
