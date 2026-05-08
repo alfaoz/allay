@@ -15,7 +15,7 @@ came along just for the package you're removing.
 
 ## Install
 
-    wget run https://raw.githubusercontent.com/alfaoz/allay/main/install.lua
+    wget run https://raw.githubusercontent.com/allaycc/allay/main/install.lua
 
 ## Use
 
@@ -38,7 +38,7 @@ work too (after `allay install allay-unicornpkg-compat`).
 ## Authoring
 
 Drop an `allay.lua` in your repo, list it in your source's `index.lua`,
-and tag a release. See [allay-spec](https://github.com/alfaoz/allay-spec)
+and tag a release. See [allay-spec](https://github.com/allaycc/spec)
 for the format.
 
 ## Repository layout
@@ -52,17 +52,17 @@ This repo contains allay's CLI and core libraries.
 
 Related repos:
 
-- [allay-spec](https://github.com/alfaoz/allay-spec) — file format
+- [allay-spec](https://github.com/allaycc/spec) — file format
   documentation
-- [allay-core](https://github.com/alfaoz/allay-core) — default source
+- [allay-core](https://github.com/allaycc/core) — default source
   catalog (allay's own libs as packages)
-- [lualibs](https://github.com/alfaoz/lualibs) — source code for hash,
+- [lualibs](https://github.com/allaycc/lualibs) — source code for hash,
   httpkit, pathkit, log, argparse
-- [allay-rednet-transport](https://github.com/alfaoz/allay-rednet-transport) —
+- [allay-rednet-transport](https://github.com/allaycc/rednet-transport) —
   rednet:// transport extension
-- [allay-server](https://github.com/alfaoz/allay-server) — rednet
+- [allay-server](https://github.com/allaycc/server) — rednet
   package host
-- [allay-unicornpkg-compat](https://github.com/alfaoz/allay-unicornpkg-compat) —
+- [allay-unicornpkg-compat](https://github.com/allaycc/unicornpkg-compat) —
   read packages in unicornpkg's format
 
 ## Tests

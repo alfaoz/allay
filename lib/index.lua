@@ -4,7 +4,7 @@
 --   {
 --     spec = "allay/v1.0.0",
 --     format = "allay" | "unicornpkg/v1.0.0" | ...,
---     name = "alfaoz/lualibs",
+--     name = "allaycc/lualibs",
 --     description = "...",
 --     packages = {
 --       hash = { version = "1.0.0", description = "..." },

@@ -1,7 +1,7 @@
 -- allay bootstrap installer.
 --
 -- Run with:
---   wget run https://raw.githubusercontent.com/alfaoz/allay/main/install.lua
+--   wget run https://raw.githubusercontent.com/allaycc/allay/main/install.lua
 --
 -- This script fetches allay's CLI and its core libraries from GitHub raw,
 -- installs them under /usr/allay, and configures the system so `allay` is
@@ -11,10 +11,10 @@
 -- yet). After bootstrap, every subsequent allay operation verifies hashes
 -- against the lockfile.
 
-local BASE = "https://raw.githubusercontent.com/alfaoz/allay/main"
-local CORE_BASE = "https://raw.githubusercontent.com/alfaoz/lualibs/main"
+local BASE = "https://raw.githubusercontent.com/allaycc/allay/main"
+local CORE_BASE = "https://raw.githubusercontent.com/allaycc/lualibs/main"
 local UNICORNPKG_COMPAT_BASE =
-  "https://raw.githubusercontent.com/alfaoz/allay-unicornpkg-compat/main"
+  "https://raw.githubusercontent.com/allaycc/unicornpkg-compat/main"
 
 -- Files to fetch: { url, dest }
 local CORE_FILES = {
@@ -99,10 +99,10 @@ local SOURCES_FILE = "/etc/allay/sources.lua"
 -- a foreign format — `format = "unicornpkg/v1.0.0"` tells allay to route
 -- them through the bundled translator at /usr/allay/translators/unicornpkg.lua.
 local DEFAULT_SOURCES = [[{
-  { id = "alfaoz/allay-core",
-    url = "https://raw.githubusercontent.com/alfaoz/allay-core/main" },
-  { id = "alfaoz/allay-extras",
-    url = "https://raw.githubusercontent.com/alfaoz/allay-extras/main" },
+  { id = "allaycc/core",
+    url = "https://raw.githubusercontent.com/allaycc/core/main" },
+  { id = "allaycc/extras",
+    url = "https://raw.githubusercontent.com/allaycc/extras/main" },
   { id = "unicornpkg/unicornpkg-main",
     url = "https://unicornpkg.github.io/unicornpkg-main",
     format = "unicornpkg/v1.0.0" },
@@ -260,7 +260,7 @@ local function main()
     else
       local pkg_to_files = {
         allay = {
-          version = "0.1.0", source = "alfaoz/allay-core", manual = true,
+          version = "0.1.0", source = "allaycc/core", manual = true,
           dests = {
             "/bin/allay.lua",
             "/usr/allay/lib/allay/source.lua",
@@ -277,24 +277,24 @@ local function main()
             "/usr/allay/setup.lua",
           },
         },
-        hash     = { version = "1.0.0", source = "alfaoz/allay-core",
+        hash     = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/hash/init.lua" } },
-        httpkit  = { version = "1.0.0", source = "alfaoz/allay-core",
+        httpkit  = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/httpkit/init.lua" } },
-        pathkit  = { version = "1.0.0", source = "alfaoz/allay-core",
+        pathkit  = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/pathkit/init.lua" } },
-        log      = { version = "1.0.0", source = "alfaoz/allay-core",
+        log      = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/log/init.lua" } },
-        argparse = { version = "1.0.0", source = "alfaoz/allay-core",
+        argparse = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/argparse/init.lua" } },
-        levenshtein = { version = "1.0.0", source = "alfaoz/allay-core",
+        levenshtein = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/levenshtein/init.lua" } },
-        ui       = { version = "1.0.0", source = "alfaoz/allay-core",
+        ui       = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/ui/init.lua" } },
-        scout    = { version = "1.0.0", source = "alfaoz/allay-core",
+        scout    = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/scout/init.lua" } },
         ["allay-unicornpkg-compat"] = {
-          version = "1.0.0", source = "alfaoz/allay-core",
+          version = "1.0.0", source = "allaycc/core",
           dests = { "/usr/allay/translators/unicornpkg.lua" },
         },
       }
@@ -356,7 +356,7 @@ local function main()
   if not fs.exists(SOURCES_FILE) then
     write_file(SOURCES_FILE, DEFAULT_SOURCES)
     info("  wrote " .. SOURCES_FILE
-      .. " (default sources: alfaoz/allay-core, unicornpkg/unicornpkg-main)")
+      .. " (default sources: allaycc/core, unicornpkg/unicornpkg-main)")
   end
 
   if fs.exists(STARTUP_FILE) then

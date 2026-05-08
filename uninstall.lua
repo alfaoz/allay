@@ -1,7 +1,7 @@
 -- allay uninstall script.
 --
 -- Wipes allay and everything it installed. Run with:
---   wget run https://raw.githubusercontent.com/alfaoz/allay/main/uninstall.lua
+--   wget run https://raw.githubusercontent.com/allaycc/allay/main/uninstall.lua
 --
 -- This is a separate script (not an `allay` CLI command) by design, the
 -- same way Homebrew ships its uninstall as a separate curl-piped script.

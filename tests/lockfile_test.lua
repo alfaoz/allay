@@ -64,7 +64,7 @@ check("empty no packages", 0, #lockfile.installed_packages(lock))
 -- Insert + query.
 lockfile.insert(lock, "hash", {
   version = "1.0.0",
-  source = "alfaoz/allay-core",
+  source = "allaycc/core",
   manual = true,
   pinned = false,
   files = {
@@ -80,7 +80,7 @@ check("after insert not_installed", false, lockfile.is_installed(lock, "missing"
 -- Insert package with deps.
 lockfile.insert(lock, "secure-rednet", {
   version = "1.0.0",
-  source = "alfaoz/allay-core",
+  source = "allaycc/core",
   manual = true,
   pinned = false,
   files = {
@@ -95,7 +95,7 @@ check("dep dependents updated", "secure-rednet", lock.packages.hash.dependents[1
 -- Insert another package with same dep.
 lockfile.insert(lock, "auth", {
   version = "1.0.0",
-  source = "alfaoz/allay-core",
+  source = "allaycc/core",
   manual = true,
   pinned = false,
   files = { { dest = "/usr/allay/lib/auth/init.lua", sha256 = string.rep("c", 64) } },
