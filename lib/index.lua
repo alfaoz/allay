@@ -24,6 +24,14 @@ local source_mod = require("source")
 -- If the source has no index.lua, returns (nil, "blind") which callers should
 -- treat as "fall back to direct fetches by name".
 function M.fetch(source)
+  -- Sources declaring a non-allay format don't publish an allay index.lua
+  -- (their packages are translated on the fly during resolution). Run them
+  -- in blind mode: per-package fetches by name from <source.url>/<name>.lua,
+  -- which the resolver pipes through the matching translator.
+  if source.format and not source.format:match("^allay/") then
+    return nil, "blind"
+  end
+
   local url = source_mod.file_url(source, "index.lua")
   local body, err = transport.fetch(url)
   if not body then

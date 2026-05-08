@@ -15,6 +15,21 @@ local source_mod = require("source")
 local index_mod = require("index")
 local transport = require("transport")
 local pkg_mod = require("pkg")
+local translator_mod = require("translator")
+
+-- If the source declares a non-allay format, route the raw body through the
+-- matching translator before validating against allay's schema. Otherwise,
+-- the standard parse-and-validate path applies.
+local function load_pkg_for_source(source, body, name)
+  if source.format and not source.format:match("^allay/") then
+    local raw, err = pkg_mod.load_raw(body, name)
+    if not raw then return nil, err end
+    local translated, t_err = translator_mod.translate(source.format, raw)
+    if not translated then return nil, "translator: " .. (t_err or "?") end
+    return pkg_mod.validate(translated)
+  end
+  return pkg_mod.load_string(body, name)
+end
 
 -- Find a package in a list of sources. Returns (pkg_def, source, err).
 -- The package def is parsed and validated; ready for use.
@@ -75,7 +90,7 @@ local function find_package(name, sources, opts)
     do
       local body, fetch_err = transport.fetch(source_mod.file_url(source, file_path))
       if body then
-        local pkg, parse_err = pkg_mod.load_string(body, name)
+        local pkg, parse_err = load_pkg_for_source(source, body, name)
         if pkg then
           return pkg, source
         else

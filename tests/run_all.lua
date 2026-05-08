@@ -10,6 +10,7 @@ local tests = {
   { dir = ".", name = "schema_test" },
   { dir = ".", name = "lockfile_test" },
   { dir = ".", name = "source_test" },
+  { dir = ".", name = "translator_test" },
   { dir = ".", name = "resolver_test" },
   { dir = ".", name = "installer_test" },
   { dir = ".", name = "cli_test" },

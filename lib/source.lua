@@ -74,8 +74,14 @@ function M.save(sources)
   -- Serialize.
   local lines = { "{" }
   for _, s in ipairs(sources) do
-    table.insert(lines, string.format("  { id = %q, url = %q },",
-      s.id or s.url, s.url))
+    if s.format then
+      table.insert(lines, string.format(
+        "  { id = %q, url = %q, format = %q },",
+        s.id or s.url, s.url, s.format))
+    else
+      table.insert(lines, string.format("  { id = %q, url = %q },",
+        s.id or s.url, s.url))
+    end
   end
   table.insert(lines, "}")
   local serialized = table.concat(lines, "\n") .. "\n"
@@ -87,9 +93,19 @@ end
 -- ---------------------------------------------------------------------------
 
 -- Add a source by spec. Returns (entry, err).
-function M.add(spec)
-  local url, err = M.expand(spec)
-  if err then return nil, err end
+-- opts.format: optional translator format string (e.g., "unicornpkg/v1.0.0").
+-- opts.url:    optional explicit URL override (skips shorthand expansion).
+function M.add(spec, opts)
+  opts = opts or {}
+  local url
+  if opts.url then
+    url = opts.url
+    if url:sub(-1) == "/" then url = url:sub(1, -2) end
+  else
+    local err
+    url, err = M.expand(spec)
+    if err then return nil, err end
+  end
 
   local sources, load_err = M.load()
   if load_err then return nil, load_err end
@@ -101,6 +117,7 @@ function M.add(spec)
   end
 
   local entry = { id = spec, url = url }
+  if opts.format then entry.format = opts.format end
   table.insert(sources, entry)
   local ok, save_err = M.save(sources)
   if not ok then return nil, save_err end

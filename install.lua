@@ -28,6 +28,7 @@ local CORE_FILES = {
   { BASE .. "/lib/resolver.lua",               "/usr/allay/lib/allay/resolver.lua" },
   { BASE .. "/lib/installer.lua",              "/usr/allay/lib/allay/installer.lua" },
   { BASE .. "/lib/github.lua",                 "/usr/allay/lib/allay/github.lua" },
+  { BASE .. "/lib/translator.lua",             "/usr/allay/lib/allay/translator.lua" },
   { BASE .. "/lib/transport/init.lua",         "/usr/allay/lib/transport/init.lua" },
   { BASE .. "/lib/transport/https.lua",        "/usr/allay/lib/transport/https.lua" },
   { BASE .. "/lib/transport/disk.lua",         "/usr/allay/lib/transport/disk.lua" },
@@ -88,11 +89,18 @@ end
 ]]
 
 local SOURCES_FILE = "/etc/allay/sources.lua"
+-- Default sources installed on bootstrap. unicornpkg's manifest is published
+-- via GitHub Pages (not raw.githubusercontent.com), and its packages are in
+-- a foreign format — `format = "unicornpkg/v1.0.0"` tells allay to route
+-- them through the bundled translator at /usr/allay/translators/unicornpkg.lua.
 local DEFAULT_SOURCES = [[{
   { id = "alfaoz/allay-core",
     url = "https://raw.githubusercontent.com/alfaoz/allay-core/main" },
+  { id = "alfaoz/allay-extras",
+    url = "https://raw.githubusercontent.com/alfaoz/allay-extras/main" },
   { id = "unicornpkg/unicornpkg-main",
-    url = "https://raw.githubusercontent.com/unicornpkg/unicornpkg-main/main" },
+    url = "https://unicornpkg.github.io/unicornpkg-main",
+    format = "unicornpkg/v1.0.0" },
 }
 ]]
 
@@ -258,6 +266,7 @@ local function main()
             "/usr/allay/lib/allay/resolver.lua",
             "/usr/allay/lib/allay/installer.lua",
             "/usr/allay/lib/allay/github.lua",
+            "/usr/allay/lib/allay/translator.lua",
             "/usr/allay/lib/transport/init.lua",
             "/usr/allay/lib/transport/https.lua",
             "/usr/allay/lib/transport/disk.lua",

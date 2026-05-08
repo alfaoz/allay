@@ -503,12 +503,16 @@ function commands.source(args)
       fail("error: missing repository")
       return
     end
-    local entry, err = source_mod.add(args.repo)
+    local add_opts = {}
+    if args.options.format then add_opts.format = args.options.format end
+    if args.options.url then add_opts.url = args.options.url end
+    local entry, err = source_mod.add(args.repo, add_opts)
     if not entry then
       fail("error: " .. err)
       return
     end
-    ok("Added source: " .. entry.id .. " -> " .. entry.url)
+    local fmt = entry.format and ("  [" .. entry.format .. "]") or ""
+    ok("Added source: " .. entry.id .. " -> " .. entry.url .. fmt)
   elseif sub == "remove" then
     if not args.repo then
       fail("error: missing repository")
@@ -526,7 +530,8 @@ function commands.source(args)
       info("No sources configured.")
     else
       for _, s in ipairs(sources) do
-        info(string.format("%-32s %s", s.id, s.url))
+        local fmt = s.format and ("  [" .. s.format .. "]") or ""
+        info(string.format("%-32s %s%s", s.id, s.url, fmt))
       end
     end
   else
@@ -836,11 +841,17 @@ local DETAILED_HELP = {
   update = "allay update [<pkg>] [--yes]\n\n"
     .. "Without args, update everything. With a package name, update just\n"
     .. "that one. Pinned packages are skipped.",
-  source = "allay source add <user/repo>\n"
+  source = "allay source add <user/repo> [--url=<url>] [--format=<fmt>]\n"
     .. "allay source remove <user/repo>\n"
     .. "allay source list\n\n"
     .. "Manage the list of package sources. Sources can be GitHub shorthand\n"
-    .. "(user/repo) or full HTTPS URLs.",
+    .. "(user/repo) or full HTTPS URLs.\n\n"
+    .. "  --url=<url>     Use this exact URL instead of expanding the shorthand.\n"
+    .. "                  Useful for GitHub Pages-hosted sources.\n"
+    .. "  --format=<fmt>  Tag the source with a translator format. Packages\n"
+    .. "                  fetched from this source are routed through the\n"
+    .. "                  matching translator at /usr/allay/translators/.\n"
+    .. "                  Currently supported: unicornpkg/v1.0.0",
   scout = "allay scout gh:user/repo[@ref]\n\n"
     .. "Walk a GitHub repo, classify its files, and print a synthesized\n"
     .. "allay.lua to stdout. Use this to seed a curated source with a\n"
@@ -890,7 +901,12 @@ local function parse_argv(argv)
     elseif a == "--help" or a == "-h" then
       args.flags.help = true
     elseif a:sub(1, 2) == "--" then
-      args.flags[a:sub(3)] = true
+      local key, val = a:sub(3):match("^([^=]+)=(.*)$")
+      if key then
+        args.options[key] = val
+      else
+        args.flags[a:sub(3)] = true
+      end
     else
       table.insert(positionals, a)
     end

@@ -28,8 +28,11 @@ local function sandbox_env()
   }
 end
 
--- Load a package definition from raw Lua source. Returns (pkg, err).
-function M.load_string(source, name)
+-- Parse a package definition from raw Lua source without validating.
+-- Used by translator-aware code paths that need to inspect/transform the
+-- raw table before it conforms to allay's schema.
+-- Returns (raw_table, err).
+function M.load_raw(source, name)
   local fn, parse_err = load(source, name or "package", "t", sandbox_env())
   if not fn then
     return nil, "package: parse error: " .. (parse_err or "?")
@@ -41,9 +44,22 @@ function M.load_string(source, name)
   if type(value) ~= "table" then
     return nil, "package: must return a table"
   end
-  local valid, err = schema.validate_package(value)
-  if not valid then return nil, err end
   return value
+end
+
+-- Validate an already-loaded package table. Returns (pkg, err).
+function M.validate(pkg)
+  local valid, err = schema.validate_package(pkg)
+  if not valid then return nil, err end
+  return pkg
+end
+
+-- Load + validate a package definition from raw Lua source. The common path.
+-- Returns (pkg, err).
+function M.load_string(source, name)
+  local raw, err = M.load_raw(source, name)
+  if not raw then return nil, err end
+  return M.validate(raw)
 end
 
 -- Load a package definition from a file path.

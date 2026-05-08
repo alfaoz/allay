@@ -251,6 +251,75 @@ local plan3, _ = resolver.resolve({"conflict-a"}, lock3, sources)
 local conflict_ok, conflict_err = resolver.check_conflicts(plan3, lock3)
 check("conflict with installed detected", false, conflict_ok)
 
+-- ---------------------------------------------------------------------------
+-- Translator dispatch: a source declaring format = "fakefmt/v1.0.0" routes
+-- per-package fetches through a translator. We stub the translator on disk
+-- and verify the resolver correctly transforms the foreign-format body into
+-- an allay-shaped package.
+-- ---------------------------------------------------------------------------
+local translator = require("translator")
+local TMP = os.getenv("TMPDIR") or "/tmp"
+TMP = TMP:gsub("/$", "")
+local TRANS_DIR = TMP .. "/allay-translator-resolver-test-" .. tostring(os.time())
+os.execute("mkdir -p '" .. TRANS_DIR .. "'")
+translator.TRANSLATOR_DIR = TRANS_DIR
+translator.reset()
+
+local prev_fs_exists = _G.fs.exists
+_G.fs.exists = function(p)
+  -- Defer to the in-memory fake for paths the resolver-under-test is using,
+  -- but check real disk for the translator file (which lives in TRANS_DIR).
+  if p:sub(1, #TRANS_DIR) == TRANS_DIR then
+    local fh = io.open(p, "r")
+    if fh then fh:close() return true end
+    return false
+  end
+  return prev_fs_exists(p)
+end
+
+local f = io.open(TRANS_DIR .. "/fakefmt.lua", "w")
+f:write([[
+return {
+  translate = function(raw)
+    return {
+      name = raw.foreign_id,
+      base_url = "https://example.com/foreign/" .. raw.foreign_id,
+      files = { lib = { ["init.lua"] = "init.lua" } },
+      version = raw.foreign_version or "0.0.0",
+    }
+  end,
+}
+]])
+f:close()
+
+-- A source in foreign format. Note: no index.lua needed -- index_mod.fetch
+-- short-circuits to blind mode for non-allay formats.
+local foreign_source = {
+  id = "foreign/main",
+  url = "https://foreign.example.com",
+  format = "fakefmt/v1.0.0",
+}
+
+http_responses["https://foreign.example.com/foreignpkg.lua"] = [[return {
+  foreign_id = "foreignpkg",
+  foreign_version = "9.9.9",
+}]]
+
+local foreign_plan, foreign_err = resolver.resolve({"foreignpkg"},
+  lockfile_mod.empty(), { foreign_source })
+check("foreign-format resolve ok", true, foreign_plan ~= nil)
+check("foreign-format plan length", 1, foreign_plan and #foreign_plan or 0)
+check("foreign-format pkg name", "foreignpkg",
+  foreign_plan and foreign_plan[1].package.name)
+check("foreign-format pkg version", "9.9.9",
+  foreign_plan and foreign_plan[1].package.version)
+check("foreign-format source preserved", "foreign/main",
+  foreign_plan and foreign_plan[1].source.id)
+
+-- Cleanup translator file.
+os.execute("rm -rf '" .. TRANS_DIR .. "'")
+_G.fs.exists = prev_fs_exists
+
 print()
 print(string.format("resolver: %d/%d tests passed", total - failed, total))
 if failed > 0 then os.exit(1) end
