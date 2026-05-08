@@ -6,6 +6,9 @@ local tests = {
   { dir = "../../lualibs/tests", name = "log_test" },
   { dir = "../../lualibs/tests", name = "httpkit_test" },
   { dir = "../../lualibs/tests", name = "argparse_test" },
+  { dir = "../../lualibs/tests", name = "levenshtein_test" },
+  { dir = "../../lualibs/tests", name = "ui_test" },
+  { dir = "../../lualibs/tests", name = "scout_test" },
   -- allay-specific tests (this dir)
   { dir = ".", name = "schema_test" },
   { dir = ".", name = "lockfile_test" },
@@ -14,7 +17,6 @@ local tests = {
   { dir = ".", name = "resolver_test" },
   { dir = ".", name = "installer_test" },
   { dir = ".", name = "cli_test" },
-  { dir = ".", name = "github_test" },
 }
 
 local total_pass, total_fail = 0, 0

@@ -27,7 +27,6 @@ local CORE_FILES = {
   { BASE .. "/lib/lockfile.lua",               "/usr/allay/lib/allay/lockfile.lua" },
   { BASE .. "/lib/resolver.lua",               "/usr/allay/lib/allay/resolver.lua" },
   { BASE .. "/lib/installer.lua",              "/usr/allay/lib/allay/installer.lua" },
-  { BASE .. "/lib/github.lua",                 "/usr/allay/lib/allay/github.lua" },
   { BASE .. "/lib/translator.lua",             "/usr/allay/lib/allay/translator.lua" },
   { BASE .. "/lib/transport/init.lua",         "/usr/allay/lib/transport/init.lua" },
   { BASE .. "/lib/transport/https.lua",        "/usr/allay/lib/transport/https.lua" },
@@ -43,6 +42,9 @@ local CORE_FILES = {
   { CORE_BASE .. "/pathkit/init.lua",          "/usr/allay/lib/pathkit/init.lua" },
   { CORE_BASE .. "/log/init.lua",              "/usr/allay/lib/log/init.lua" },
   { CORE_BASE .. "/argparse/init.lua",         "/usr/allay/lib/argparse/init.lua" },
+  { CORE_BASE .. "/levenshtein/init.lua",      "/usr/allay/lib/levenshtein/init.lua" },
+  { CORE_BASE .. "/ui/init.lua",               "/usr/allay/lib/ui/init.lua" },
+  { CORE_BASE .. "/scout/init.lua",            "/usr/allay/lib/scout/init.lua" },
 
   -- unicornpkg compat translator. Shipped by default so the unicornpkg
   -- catalog (which is the largest existing CC: Tweaked package ecosystem)
@@ -56,6 +58,9 @@ local DIRECTORIES = {
   "/usr/allay/lib",
   "/usr/allay/lib/allay",
   "/usr/allay/lib/transport",
+  "/usr/allay/lib/levenshtein",
+  "/usr/allay/lib/ui",
+  "/usr/allay/lib/scout",
   "/usr/allay/translators",
   "/usr/allay/providers",
   "/var/allay",
@@ -265,7 +270,6 @@ local function main()
             "/usr/allay/lib/allay/lockfile.lua",
             "/usr/allay/lib/allay/resolver.lua",
             "/usr/allay/lib/allay/installer.lua",
-            "/usr/allay/lib/allay/github.lua",
             "/usr/allay/lib/allay/translator.lua",
             "/usr/allay/lib/transport/init.lua",
             "/usr/allay/lib/transport/https.lua",
@@ -283,6 +287,12 @@ local function main()
                      dests = { "/usr/allay/lib/log/init.lua" } },
         argparse = { version = "1.0.0", source = "alfaoz/allay-core",
                      dests = { "/usr/allay/lib/argparse/init.lua" } },
+        levenshtein = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/levenshtein/init.lua" } },
+        ui       = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/ui/init.lua" } },
+        scout    = { version = "1.0.0", source = "alfaoz/allay-core",
+                     dests = { "/usr/allay/lib/scout/init.lua" } },
         ["allay-unicornpkg-compat"] = {
           version = "1.0.0", source = "alfaoz/allay-core",
           dests = { "/usr/allay/translators/unicornpkg.lua" },

@@ -19,70 +19,22 @@ local pathkit = require("pathkit")
 local pkg_mod = require("pkg")
 local hash = require("hash")
 local log = require("log")
-local github = require("github")
+local github = require("scout")
+local ui = require("ui")
+local levenshtein = require("levenshtein")
 
 local VERSION = "0.1.0"
 
 -- ---------------------------------------------------------------------------
--- Output helpers
+-- Output helpers (thin aliases for ui)
 -- ---------------------------------------------------------------------------
 
-local function color(c, text)
-  if _G.term and _G.colors and _G.term.setTextColor then
-    local prev = _G.term.getTextColor and _G.term.getTextColor()
-    _G.term.setTextColor(_G.colors[c] or _G.colors.white)
-    io.write(text)
-    if prev then _G.term.setTextColor(prev) end
-  else
-    io.write(text)
-  end
-end
-
-local function ok(msg)    color("green",  msg .. "\n") end
-local function info(msg)  color("white",  msg .. "\n") end
-local function warn(msg)  color("yellow", msg .. "\n") end
-local function fail(msg)  color("red",    msg .. "\n") end
-
--- Confirm prompt. Returns true for yes, false for no. Honors --yes flag.
-local function confirm(question, opts)
-  opts = opts or {}
-  if opts.yes_flag then return true end
-  io.write(question .. " [Y/n]: ")
-  io.flush()
-  local response = io.read("*l") or ""
-  response = response:lower():gsub("^%s+", ""):gsub("%s+$", "")
-  return response == "" or response == "y" or response == "yes"
-end
-
--- Levenshtein distance for typo suggestions.
-local function levenshtein(a, b)
-  if #a == 0 then return #b end
-  if #b == 0 then return #a end
-  local prev, cur = {}, {}
-  for j = 0, #b do prev[j] = j end
-  for i = 1, #a do
-    cur[0] = i
-    for j = 1, #b do
-      local cost = (a:sub(i, i) == b:sub(j, j)) and 0 or 1
-      cur[j] = math.min(
-        cur[j-1] + 1,
-        prev[j] + 1,
-        prev[j-1] + cost
-      )
-    end
-    for j = 0, #b do prev[j] = cur[j] end
-  end
-  return cur[#b]
-end
+local color, ok, info, warn, fail = ui.color, ui.ok, ui.info, ui.warn, ui.fail
+local confirm = ui.confirm
+local with_spinner = ui.with_spinner
 
 local function suggest_command(unknown, valid)
-  local best, best_dist = nil, 999
-  for _, name in ipairs(valid) do
-    local d = levenshtein(unknown, name)
-    if d < best_dist then best, best_dist = name, d end
-  end
-  if best_dist <= 2 then return best end
-  return nil
+  return (levenshtein.suggest(unknown, valid))
 end
 
 -- ---------------------------------------------------------------------------
@@ -199,10 +151,9 @@ function commands.install(args)
   local synthesized = {}
   local request_name = args.package
   if request_name:sub(1, #github.SCHEME) == github.SCHEME then
-    info("Walking " .. request_name .. "...")
-
-    local pkg, source, info_data, err = github.bundle(
-      request_name, build_known(sources))
+    local pkg, source, info_data, err = with_spinner(
+      "walking " .. request_name,
+      function() return github.bundle(request_name, build_known(sources)) end)
     if not pkg then
       fail("error: " .. (err or "github bundle failed"))
       return
@@ -259,7 +210,10 @@ function commands.install(args)
     return
   end
 
-  local results, install_err = installer.install_plan(plan, lock)
+  local results, install_err = with_spinner(
+    string.format("installing %d package%s",
+      #plan, #plan == 1 and "" or "s"),
+    function() return installer.install_plan(plan, lock) end)
   if not results then
     fail("error: " .. install_err)
     return
@@ -814,9 +768,9 @@ function commands.scout(args)
 
   local sources = source_mod.load() or {}
 
-  info("Walking " .. args.target .. "...")
-  local pkg, source, info_data, err = github.bundle(
-    args.target, build_known(sources))
+  local pkg, source, info_data, err = with_spinner(
+    "walking " .. args.target,
+    function() return github.bundle(args.target, build_known(sources)) end)
   if not pkg then
     fail("error: " .. (err or "scout failed"))
     return
