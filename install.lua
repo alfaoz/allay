@@ -261,6 +261,7 @@ local function main()
       local pkg_to_files = {
         allay = {
           version = "0.1.0", source = "allaycc/core", manual = true,
+          description = "The allay package manager (so it can update itself)",
           dests = {
             "/bin/allay.lua",
             "/usr/allay/lib/allay/source.lua",
@@ -278,23 +279,32 @@ local function main()
           },
         },
         hash     = { version = "1.0.0", source = "allaycc/core",
+                     description = "SHA-256 in pure Lua",
                      dests = { "/usr/allay/lib/hash/init.lua" } },
         httpkit  = { version = "1.0.0", source = "allaycc/core",
+                     description = "HTTP helpers built on CC's http API",
                      dests = { "/usr/allay/lib/httpkit/init.lua" } },
         pathkit  = { version = "1.0.0", source = "allaycc/core",
+                     description = "Path manipulation and atomic file I/O",
                      dests = { "/usr/allay/lib/pathkit/init.lua" } },
         log      = { version = "1.0.0", source = "allaycc/core",
+                     description = "Leveled logger with colored output",
                      dests = { "/usr/allay/lib/log/init.lua" } },
         argparse = { version = "1.0.0", source = "allaycc/core",
+                     description = "Subcommand-style argument parser",
                      dests = { "/usr/allay/lib/argparse/init.lua" } },
         levenshtein = { version = "1.0.0", source = "allaycc/core",
+                     description = "Edit-distance for did-you-mean suggestions",
                      dests = { "/usr/allay/lib/levenshtein/init.lua" } },
         ui       = { version = "1.0.0", source = "allaycc/core",
+                     description = "Color/status helpers for CLI output",
                      dests = { "/usr/allay/lib/ui/init.lua" } },
         scout    = { version = "1.0.0", source = "allaycc/core",
+                     description = "Spinner and progress indicators for CC",
                      dests = { "/usr/allay/lib/scout/init.lua" } },
         alicorn = {
           version = "1.0.0", source = "allaycc/core",
+          description = "Translator that lets allay read unicornpkg-format packages.",
           dests = { "/usr/allay/translators/alicorn.lua" },
         },
       }
@@ -314,6 +324,7 @@ local function main()
         end
         lock.packages[name] = {
           version = meta.version,
+          description = meta.description,
           source = meta.source,
           manual = meta.manual == true,
           pinned = false,
@@ -329,6 +340,9 @@ local function main()
       for name, entry in pairs(lock.packages) do
         table.insert(lines, "    [" .. string.format("%q", name) .. "] = {")
         table.insert(lines, "      version = " .. string.format("%q", entry.version) .. ",")
+        if entry.description then
+          table.insert(lines, "      description = " .. string.format("%q", entry.description) .. ",")
+        end
         table.insert(lines, "      source = " .. string.format("%q", entry.source) .. ",")
         table.insert(lines, "      manual = " .. tostring(entry.manual) .. ",")
         table.insert(lines, "      pinned = false,")
