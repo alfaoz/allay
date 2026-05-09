@@ -45,6 +45,7 @@ local CORE_FILES = {
   { CORE_BASE .. "/levenshtein/init.lua",      "/usr/allay/lib/levenshtein/init.lua" },
   { CORE_BASE .. "/ui/init.lua",               "/usr/allay/lib/ui/init.lua" },
   { CORE_BASE .. "/scout/init.lua",            "/usr/allay/lib/scout/init.lua" },
+  { CORE_BASE .. "/observe/init.lua",          "/usr/allay/lib/observe/init.lua" },
 
   -- alicorn: unicornpkg-format translator. Shipped by default so the
   -- unicornpkg catalog (the largest existing CC: Tweaked package ecosystem)
@@ -61,6 +62,7 @@ local DIRECTORIES = {
   "/usr/allay/lib/levenshtein",
   "/usr/allay/lib/ui",
   "/usr/allay/lib/scout",
+  "/usr/allay/lib/observe",
   "/usr/allay/translators",
   "/usr/allay/providers",
   "/var/allay",
@@ -300,8 +302,11 @@ local function main()
                      description = "Color/status helpers for CLI output",
                      dests = { "/usr/allay/lib/ui/init.lua" } },
         scout    = { version = "1.0.0", source = "allaycc/core",
-                     description = "Spinner and progress indicators for CC",
+                     description = "Walk a GitHub repo and synthesize an installable package",
                      dests = { "/usr/allay/lib/scout/init.lua" } },
+        observe  = { version = "1.0.0", source = "allaycc/core",
+                     description = "Hook fs to track files written by a foreign installer",
+                     dests = { "/usr/allay/lib/observe/init.lua" } },
         alicorn = {
           version = "1.0.0", source = "allaycc/core",
           description = "Translator that lets allay read unicornpkg-format packages.",

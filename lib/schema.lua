@@ -257,6 +257,9 @@ function M.validate_lockfile(lock)
     if entry.dependents ~= nil and not is_list_of_strings(entry.dependents) then
       return false, "lockfile: " .. name .. ": dependents must be string list"
     end
+    if entry.installer ~= nil and not is_string(entry.installer) then
+      return false, "lockfile: " .. name .. ": installer must be a string"
+    end
   end
 
   return true

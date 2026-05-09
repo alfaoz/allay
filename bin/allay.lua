@@ -169,6 +169,75 @@ function commands.install(args)
       warn("If these are needed, install them yourself before this package is loaded.")
     end
 
+    -- Look for an installer file at the root of the bundled source. If we
+    -- find one, the user gets a choice: run it through observe (allay
+    -- tracks every file it writes and the package becomes manageable
+    -- like any other), or fall back to scout's bare-source bundle.
+    local installer_src, installer_path
+    if info_data.fetch_cache then
+      local candidates = {
+        "vim_installer.lua", "install.lua", "installer.lua",
+        "setup.lua", pkg.name .. "_installer.lua",
+      }
+      for _, cand in ipairs(candidates) do
+        if info_data.fetch_cache[cand] then
+          installer_src = info_data.fetch_cache[cand]
+          installer_path = cand
+          break
+        end
+      end
+    end
+
+    if installer_src then
+      info("")
+      info("↳ detected installer: " .. installer_path)
+      info("  this repo ships its own installer. allay can run it for you")
+      info("  and track every file it writes — you'll get install / update /")
+      info("  remove / list support like a normal package.")
+      info("")
+      info("  what allay tracks:  fs writes, deletes, dirs, moves, copies")
+      info("  what it CAN'T see:  in-place edits via APIs other than fs,")
+      info("                      side effects in subprocesses with their own env")
+      info("")
+      local choice
+      if args.flags.yes then
+        choice = "installer"
+      elseif confirm("Run the installer (Y) or use scout's bundle (n)?",
+                     { default = true }) then
+        choice = "installer"
+      else
+        choice = "scout"
+      end
+
+      if choice == "installer" then
+        local result, run_err = installer.install_via_observed(lock, {
+          name = pkg.name,
+          installer_src = installer_src,
+          installer_path = installer_path,
+          source_id = request_name,
+          version = pkg.version or "0.0.0",
+          description = pkg.description,
+          manual = true,
+          inferred_deps = info_data.detected_deps or {},
+        })
+        if not result then
+          fail("error: " .. run_err)
+          return
+        end
+        ok(string.format("Installed %s — %d files tracked.",
+          result.name, result.files_count))
+        if result.post_install_message then
+          info("")
+          info(result.post_install_message)
+        end
+        info("")
+        info(string.format(
+          "(%d file%s installed without author-pinned hashes; recorded as TOFU)",
+          result.tofu_count, result.tofu_count == 1 and "" or "s"))
+        return
+      end
+    end
+
     synthesized[pkg.name] = {
       pkg = pkg,
       source = source,
@@ -501,6 +570,9 @@ function commands.info(args)
         info("  library:      " .. lib_prefix)
         break
       end
+    end
+    if installed.installer then
+      info("  installer:    " .. installed.installer .. " (foreign, observed)")
     end
     info("  manual:       " .. tostring(installed.manual))
     if installed.pinned then info("  pinned:       true") end

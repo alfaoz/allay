@@ -231,6 +231,105 @@ function M.install_plan(plan, lockfile, opts)
   return results
 end
 
+-- Install a package by running its own installer in an observed env,
+-- capturing every file the installer wrote, and recording the result as
+-- a normal lockfile entry. The package becomes manageable through
+-- `list`, `info`, `update`, and `remove` like any other.
+--
+-- opts must contain:
+--   name              - package name to record in the lockfile
+--   installer_src     - the installer's Lua source (string)
+--   installer_path    - the installer's filename (for error messages)
+--   source_id         - what to record as `source` (e.g. "gh:user/repo@ref")
+--   version           - what to record as version (defaults to "0.0.0")
+--   description       - optional, recorded as-is
+--   manual            - whether the user requested this directly
+--   inferred_deps     - list of dep names scout detected for the source repo
+--
+-- Returns (result, err) where result has { name, version, files_count,
+-- tofu_count, post_install_message, has_hooks }.
+function M.install_via_observed(lockfile, opts)
+  local observe = require("observe")
+  if not observe then
+    return nil, "observe library not available"
+  end
+
+  local name = opts.name
+  if not name then return nil, "install_via_observed: opts.name required" end
+
+  local installer_src = opts.installer_src
+  if not installer_src then return nil, "install_via_observed: opts.installer_src required" end
+
+  log.info(string.format("Running %s under observe...", opts.installer_path or "installer"))
+
+  -- Hook fs and run the installer.
+  local session = observe.start()
+  local fn, load_err = load(installer_src, opts.installer_path or "installer", "t", session.env)
+  if not fn then
+    return nil, "installer parse failed: " .. (load_err or "?")
+  end
+
+  local ok, run_err = pcall(fn)
+  if not ok then
+    return nil, "installer raised: " .. tostring(run_err)
+  end
+
+  local manifest = session:finish()
+
+  -- Translate the observe manifest into a lockfile-shaped file list.
+  -- We keep `tofu = true` for everything since installer-written files have
+  -- no author-pinned hashes. Future updates re-run and detect drift.
+  local files = {}
+  for _, w in ipairs(manifest.writes) do
+    table.insert(files, {
+      dest = w.path,
+      sha256 = w.sha256,
+      tofu = true,
+    })
+  end
+
+  if #files == 0 then
+    return nil, "installer wrote no files (probably failed silently)"
+  end
+
+  -- Build the lockfile entry. Same shape as a regular install so list /
+  -- info / remove / update don't need to special-case it.
+  local entry = {
+    version = opts.version or "0.0.0",
+    description = opts.description,
+    source = opts.source_id,
+    manual = opts.manual == true,
+    pinned = false,
+    files = files,
+    dependencies = opts.inferred_deps or {},
+    dependents = {},
+    -- Marks the package as installer-driven so update/remove know to
+    -- re-run the installer rather than fetch files individually.
+    installer = opts.installer_path,
+  }
+
+  lockfile_mod.insert(lockfile, name, entry)
+
+  local ok2, save_err = lockfile_mod.save(lockfile)
+  if not ok2 then
+    return nil, "lockfile save failed: " .. (save_err or "?")
+  end
+
+  -- Count tofu (which is all of them for installer-driven).
+  return {
+    name = name,
+    version = entry.version,
+    files_count = #files,
+    tofu_count = #files,
+    manual = entry.manual,
+    has_hooks = false,
+    post_install_message =
+      "installed via " .. (opts.installer_path or "installer")
+      .. " — " .. #files .. " file(s) tracked. "
+      .. "use `allay info " .. name .. "` to inspect.",
+  }
+end
+
 -- Remove a package's files from disk and the lockfile.
 -- Returns (ok, err).
 function M.remove_package(lockfile, name)
