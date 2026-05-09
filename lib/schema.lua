@@ -31,6 +31,13 @@ local function is_list_of_strings(v)
   return count == #v
 end
 
+local function is_array(v)
+  if type(v) ~= "table" then return false end
+  local count = 0
+  for _ in pairs(v) do count = count + 1 end
+  return count == #v
+end
+
 -- ---------------------------------------------------------------------------
 -- Package definition (allay.lua)
 -- ---------------------------------------------------------------------------
@@ -259,6 +266,39 @@ function M.validate_lockfile(lock)
     end
     if entry.installer ~= nil and not is_string(entry.installer) then
       return false, "lockfile: " .. name .. ": installer must be a string"
+    end
+    if entry.installer_args ~= nil
+       and not is_list_of_strings(entry.installer_args) then
+      return false, "lockfile: " .. name .. ": installer_args must be string list"
+    end
+    if entry.fetches ~= nil then
+      if not is_array(entry.fetches) then
+        return false, "lockfile: " .. name .. ": fetches must be a list"
+      end
+      for _, fetch in ipairs(entry.fetches) do
+        if not is_table(fetch) or not is_string(fetch.url) then
+          return false, "lockfile: " .. name .. ": fetch entries malformed"
+        end
+        if fetch.sha256 ~= nil and not is_string(fetch.sha256) then
+          return false, "lockfile: " .. name .. ": fetch sha256 must be string"
+        end
+        if fetch.bytes ~= nil and type(fetch.bytes) ~= "number" then
+          return false, "lockfile: " .. name .. ": fetch bytes must be number"
+        end
+      end
+    end
+    if entry.shell_runs ~= nil then
+      if not is_array(entry.shell_runs) then
+        return false, "lockfile: " .. name .. ": shell_runs must be a list"
+      end
+      for _, run in ipairs(entry.shell_runs) do
+        if not is_table(run) or not is_string(run.command) then
+          return false, "lockfile: " .. name .. ": shell_run entries malformed"
+        end
+        if run.args ~= nil and not is_list_of_strings(run.args) then
+          return false, "lockfile: " .. name .. ": shell_run args must be string list"
+        end
+      end
     end
   end
 

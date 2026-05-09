@@ -85,11 +85,26 @@ end
 -- through the resolver, restricted to the recorded source so a package
 -- isn't silently swapped for a same-named one in another configured source.
 --
--- Returns (pkg, source, info, err). info.kind is "gh" or "regular".
+-- Returns (pkg, source, info, err). info.kind is "gh", "gh-installer",
+-- or "regular".
 -- For gh: kind, info.fetch_cache holds bodies the bundle pre-fetched.
 local function lookup_for_upgrade(name, entry, sources, known)
   local source_id = entry.source or ""
   if source_id:sub(1, #github.SCHEME) == github.SCHEME then
+    if entry.installer then
+      local peek, err = github.peek_installer(source_id, {
+        installer_paths = { entry.installer },
+      })
+      if not peek then return nil, nil, nil, err end
+      if not peek.installer then
+        return nil, nil, nil,
+          "github: installer no longer found: " .. entry.installer
+      end
+      return nil, nil, {
+        kind = "gh-installer",
+        peek = peek,
+      }
+    end
     local pkg, source, bundle_info, err = github.bundle(source_id, known)
     if not pkg then return nil, nil, nil, err end
     return pkg, source, {
@@ -168,9 +183,9 @@ function commands.install(args)
       info("  and track every file it writes — you'll get install / update /")
       info("  remove / list support like a normal package.")
       info("")
-      info("  what allay tracks:  fs writes, deletes, dirs, moves, copies")
-      info("  what it CAN'T see:  in-place edits via APIs other than fs,")
-      info("                      side effects in subprocesses with their own env")
+      info("  what allay tracks:  fs writes, dirs, moves, copies, http fetches")
+      info("  what it CAN'T see:  native side effects outside fs/http,")
+      info("                      or child processes it cannot load itself")
       info("")
       local choice
       if args.flags.yes then
@@ -195,6 +210,7 @@ function commands.install(args)
             peek.installer.path, peek.user, peek.repo, peek.ref),
           manual = true,
           inferred_deps = {},
+          installer_args = args.installer_args or {},
         })
         if not result then
           fail("error: " .. run_err)
@@ -220,7 +236,7 @@ function commands.install(args)
       "walking " .. request_name,
       function()
         return github.bundle(request_name, build_known(sources),
-                             { tree = peek.tree })
+                             { tree = peek.tree, ref = peek.ref })
       end)
     if not pkg then
       fail("error: " .. (err or "github bundle failed"))
@@ -418,7 +434,20 @@ function commands.update(args)
     else
       local pkg, source, lookup_info, err = lookup_for_upgrade(
         name, entry, sources, known)
-      if not pkg then
+      if lookup_info and lookup_info.kind == "gh-installer" then
+        color("yellow", "(rerun installer)\n")
+        table.insert(upgrades, {
+          name = name,
+          current = entry.version or "0.0.0",
+          target = "(rerun installer)",
+          installer = lookup_info.peek.installer,
+          peek = lookup_info.peek,
+          source_id = entry.source,
+          installer_args = entry.installer_args or {},
+          description = entry.description,
+          dependencies = entry.dependencies or {},
+        })
+      elseif not pkg then
         color("red", (err or "lookup failed") .. "\n")
       elseif lookup_info.kind == "gh" then
         if gh_unchanged(pkg, lookup_info.fetch_cache, entry) then
@@ -472,15 +501,33 @@ function commands.update(args)
   for _, u in ipairs(upgrades) do
     local was_manual = lock.packages[u.name].manual
     installer.remove_package(lock, u.name)
-    local plan = {{
-      name = u.name, package = u.package, source = u.source,
-      manual = was_manual, requested_by = nil,
-      fetch_cache = u.fetch_cache,
-    }}
-    local res, err = installer.install_plan(plan, lock)
-    if not res then
-      fail("error: " .. err)
-      return
+    if u.installer then
+      local res, err = installer.install_via_observed(lock, {
+        name = u.name,
+        installer_src = u.installer.source,
+        installer_path = u.installer.path,
+        source_id = u.source_id,
+        version = u.peek.ref or u.current,
+        description = u.description,
+        manual = was_manual,
+        inferred_deps = u.dependencies,
+        installer_args = u.installer_args,
+      })
+      if not res then
+        fail("error: " .. err)
+        return
+      end
+    else
+      local plan = {{
+        name = u.name, package = u.package, source = u.source,
+        manual = was_manual, requested_by = nil,
+        fetch_cache = u.fetch_cache,
+      }}
+      local res, err = installer.install_plan(plan, lock)
+      if not res then
+        fail("error: " .. err)
+        return
+      end
     end
   end
 
@@ -572,6 +619,12 @@ function commands.info(args)
     end
     if installed.installer then
       info("  installer:    " .. installed.installer .. " (foreign, observed)")
+      if #(installed.installer_args or {}) > 0 then
+        info("  installer argv: " .. table.concat(installed.installer_args, " "))
+      end
+      if #(installed.fetches or {}) > 0 then
+        info("  fetches:      " .. tostring(#installed.fetches))
+      end
     end
     info("  manual:       " .. tostring(installed.manual))
     if installed.pinned then info("  pinned:       true") end
@@ -765,7 +818,12 @@ function commands.reinstall(args)
 
   -- Capture entry before removal so we can reach back for source info.
   local lock_name = args.package
-  local source_id = (lock.packages[lock_name] or {}).source or ""
+  local old_entry = lock.packages[lock_name] or {}
+  local source_id = old_entry.source or ""
+  if (not args.installer_args or #args.installer_args == 0)
+     and old_entry.installer_args then
+    args.installer_args = old_entry.installer_args
+  end
 
   installer.remove_package(lock, lock_name)
 
@@ -961,7 +1019,7 @@ local HELP_LINES = {
   "  allay <command> [options]",
   "",
   "Commands:",
-  "  install <pkg>[@<version>]   Install a package",
+  "  install <pkg>|gh:user/repo   Install a package or GitHub repo",
   "  remove <pkg>                Uninstall a package",
   "  update [<pkg>]              Update all (or one) package",
   "  list                        Show installed packages",
@@ -985,9 +1043,12 @@ local HELP_LINES = {
 }
 
 local DETAILED_HELP = {
-  install = "allay install <pkg>[@<version>] [--yes] [--allow-scripts]\n\n"
+  install = "allay install <pkg>[@<version>] [--yes] [--allow-scripts]\n"
+    .. "allay install gh:user/repo[@ref] [--yes] [-- <installer args>]\n"
     .. "Install a package and its dependencies. The plan is shown for review\n"
-    .. "before any files are written.",
+    .. "before any files are written. GitHub repos are inspected first: a\n"
+    .. "recognized installer script is offered before falling back to a source\n"
+    .. "bundle scan.",
   remove = "allay remove <pkg> [--yes]\n\n"
     .. "Uninstall a package. Orphan dependencies (deps that came along with\n"
     .. "this package and aren't needed by anything else) are offered for\n"
@@ -1045,10 +1106,15 @@ local function parse_argv(argv)
   for i = 2, #argv do table.insert(rest, argv[i]) end
 
   -- Common flag extraction.
-  local args = { command = cmd, flags = {}, options = {} }
+  local args = { command = cmd, flags = {}, options = {}, installer_args = {} }
   local positionals = {}
+  local passthrough = false
   for _, a in ipairs(rest) do
-    if a == "--yes" or a == "-y" then
+    if passthrough then
+      table.insert(args.installer_args, a)
+    elseif a == "--" then
+      passthrough = true
+    elseif a == "--yes" or a == "-y" then
       args.flags.yes = true
     elseif a == "--allow-scripts" then
       args.flags.allow_scripts = true

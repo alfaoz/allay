@@ -270,6 +270,46 @@ check("inline content preserved", true,
   wrapper_body and wrapper_body.content
     and wrapper_body.content:find("require%('wrapped%.main'%)") ~= nil)
 
+-- Observed foreign installer: varargs are passed through and recorded so
+-- reinstall/update can re-run the same installer mode.
+files = {}
+http_responses = {}
+http_responses["https://example.com/foreign/payload"] = "foreign"
+local foreign_src = [[
+  local args = {...}
+  local request = http.get("https://example.com/foreign/payload")
+  local body = request.readAll()
+  request.close()
+  local f = fs.open(args[1] or "/foreign.lua", "w")
+  f.write(body)
+  f.close()
+]]
+local lock6 = lockfile_mod.empty()
+local result6, err6 = installer.install_via_observed(lock6, {
+  name = "foreign",
+  installer_src = foreign_src,
+  installer_path = "install.lua",
+  source_id = "gh:foo/foreign@main",
+  version = "main",
+  manual = true,
+  installer_args = { "/arg-installed.lua" },
+})
+check("observed installer ok", true, result6 ~= nil)
+check("observed installer no error", nil, err6)
+check("observed installer wrote arg path", true, fs.exists("/arg-installed.lua"))
+check("observed installer lock entry", true, lock6.packages.foreign ~= nil)
+check("observed installer path recorded", "install.lua",
+  lock6.packages.foreign and lock6.packages.foreign.installer)
+check("observed installer arg recorded", "/arg-installed.lua",
+  lock6.packages.foreign
+    and lock6.packages.foreign.installer_args
+    and lock6.packages.foreign.installer_args[1])
+check("observed installer fetch recorded", "https://example.com/foreign/payload",
+  lock6.packages.foreign
+    and lock6.packages.foreign.fetches
+    and lock6.packages.foreign.fetches[1]
+    and lock6.packages.foreign.fetches[1].url)
+
 print()
 print(string.format("installer: %d/%d tests passed", total - failed, total))
 if failed > 0 then os.exit(1) end

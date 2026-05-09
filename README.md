@@ -20,9 +20,15 @@ came along just for the package you're removing.
 ## Use
 
     allay install <package>
+    allay install gh:user/repo[@ref]
+    allay install gh:user/repo[@ref] -- <installer args>
     allay update
     allay search <query>
     allay help
+
+For GitHub repos that ship their own installer, allay can run the upstream
+installer under observation and record the files, fetches, and shell launches
+it performed. The install remains removable and updateable through allay.
 
 ## Sources
 

@@ -79,6 +79,15 @@ check("parse -y", true, args.flags.yes)
 args = allay.parse_argv({"install", "foo", "--allow-scripts"})
 check("parse --allow-scripts", true, args.flags.allow_scripts)
 
+args = allay.parse_argv({
+  "install", "gh:Pyroxenium/Basalt2", "--yes", "--", "--full", "/basalt.lua",
+})
+check("parse installer passthrough pkg", "gh:Pyroxenium/Basalt2", args.package)
+check("parse installer passthrough keeps --yes", true, args.flags.yes)
+check("parse installer passthrough count", 2, #args.installer_args)
+check("parse installer passthrough first", "--full", args.installer_args[1])
+check("parse installer passthrough second", "/basalt.lua", args.installer_args[2])
+
 args = allay.parse_argv({"source", "add", "alfaoz/foo"})
 check("parse source command", "source", args.command)
 check("parse source sub", "add", args.subcommand)

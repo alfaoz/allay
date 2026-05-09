@@ -245,6 +245,7 @@ end
 --   description       - optional, recorded as-is
 --   manual            - whether the user requested this directly
 --   inferred_deps     - list of dep names scout detected for the source repo
+--   installer_args    - optional argv to pass to the installer chunk
 --
 -- Returns (result, err) where result has { name, version, files_count,
 -- tofu_count, post_install_message, has_hooks }.
@@ -263,13 +264,15 @@ function M.install_via_observed(lockfile, opts)
   log.info(string.format("Running %s under observe...", opts.installer_path or "installer"))
 
   -- Hook fs and run the installer.
-  local session = observe.start()
+  local session = observe.start({ running_program = opts.installer_path })
   local fn, load_err = load(installer_src, opts.installer_path or "installer", "t", session.env)
   if not fn then
     return nil, "installer parse failed: " .. (load_err or "?")
   end
 
-  local ok, run_err = pcall(fn)
+  local installer_args = opts.installer_args or {}
+  local unpack_fn = table.unpack or unpack
+  local ok, run_err = pcall(fn, unpack_fn(installer_args))
   if not ok then
     return nil, "installer raised: " .. tostring(run_err)
   end
@@ -307,6 +310,15 @@ function M.install_via_observed(lockfile, opts)
     -- re-run the installer rather than fetch files individually.
     installer = opts.installer_path,
   }
+  if #installer_args > 0 then
+    entry.installer_args = installer_args
+  end
+  if #(manifest.fetches or {}) > 0 then
+    entry.fetches = manifest.fetches
+  end
+  if #(manifest.shell_runs or {}) > 0 then
+    entry.shell_runs = manifest.shell_runs
+  end
 
   lockfile_mod.insert(lockfile, name, entry)
 
@@ -321,11 +333,13 @@ function M.install_via_observed(lockfile, opts)
     version = entry.version,
     files_count = #files,
     tofu_count = #files,
+    fetches_count = #(manifest.fetches or {}),
     manual = entry.manual,
     has_hooks = false,
     post_install_message =
       "installed via " .. (opts.installer_path or "installer")
-      .. " — " .. #files .. " file(s) tracked. "
+      .. " — " .. #files .. " file(s) tracked, "
+      .. #(manifest.fetches or {}) .. " fetch(es) observed. "
       .. "use `allay info " .. name .. "` to inspect.",
   }
 end

@@ -144,6 +144,14 @@ local valid_lock = {
       },
       dependencies = {},
       dependents = {},
+      installer = "install.lua",
+      installer_args = { "--full", "basalt.lua" },
+      fetches = {
+        { url = "https://example.com/app.lua", sha256 = string.rep("b", 64), bytes = 42 },
+      },
+      shell_runs = {
+        { command = "wget", args = { "https://example.com/app.lua", "/app.lua" } },
+      },
     },
   },
 }
@@ -156,6 +164,39 @@ ok, err = schema.validate_lockfile({
   packages = { hash = { version = 1 } },
 })
 check("bad lockfile version fails", false, ok)
+
+ok, err = schema.validate_lockfile({
+  spec = "allay/v1.0.0",
+  packages = {
+    hash = {
+      version = "1.0.0",
+      installer_args = { bad = "--full" },
+    },
+  },
+})
+check("bad installer_args fails", false, ok)
+
+ok, err = schema.validate_lockfile({
+  spec = "allay/v1.0.0",
+  packages = {
+    hash = {
+      version = "1.0.0",
+      fetches = { { bytes = 1 } },
+    },
+  },
+})
+check("bad fetch entry fails", false, ok)
+
+ok, err = schema.validate_lockfile({
+  spec = "allay/v1.0.0",
+  packages = {
+    hash = {
+      version = "1.0.0",
+      shell_runs = { { args = {} } },
+    },
+  },
+})
+check("bad shell_run entry fails", false, ok)
 
 print()
 print(string.format("schema: %d/%d tests passed", total - failed, total))
