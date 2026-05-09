@@ -226,6 +226,9 @@ function M.validate_lockfile(lock)
     if not is_string(entry.version) then
       return false, "lockfile: " .. name .. ": version must be a string"
     end
+    if entry.description ~= nil and not is_string(entry.description) then
+      return false, "lockfile: " .. name .. ": description must be a string"
+    end
     if entry.source ~= nil and not is_string(entry.source) then
       return false, "lockfile: " .. name .. ": source must be a string"
     end

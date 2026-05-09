@@ -121,6 +121,7 @@ local function build_lock_entry(item, file_records)
 
   local entry = {
     version = item.package.version or "0.0.0",
+    description = item.package.description,
     source = item.source.id,
     manual = item.manual == true,
     pinned = item.pin_version ~= nil,

@@ -13,8 +13,8 @@
 
 local BASE = "https://raw.githubusercontent.com/allaycc/allay/main"
 local CORE_BASE = "https://raw.githubusercontent.com/allaycc/lualibs/main"
-local UNICORNPKG_COMPAT_BASE =
-  "https://raw.githubusercontent.com/allaycc/unicornpkg-compat/main"
+local ALICORN_BASE =
+  "https://raw.githubusercontent.com/allaycc/alicorn/main"
 
 -- Files to fetch: { url, dest }
 local CORE_FILES = {
@@ -46,11 +46,11 @@ local CORE_FILES = {
   { CORE_BASE .. "/ui/init.lua",               "/usr/allay/lib/ui/init.lua" },
   { CORE_BASE .. "/scout/init.lua",            "/usr/allay/lib/scout/init.lua" },
 
-  -- unicornpkg compat translator. Shipped by default so the unicornpkg
-  -- catalog (which is the largest existing CC: Tweaked package ecosystem)
+  -- alicorn: unicornpkg-format translator. Shipped by default so the
+  -- unicornpkg catalog (the largest existing CC: Tweaked package ecosystem)
   -- works out of the box. Removable: `allay source remove unicornpkg/unicornpkg-main`
-  -- and delete `/usr/allay/translators/unicornpkg.lua`.
-  { UNICORNPKG_COMPAT_BASE .. "/init.lua",     "/usr/allay/translators/unicornpkg.lua" },
+  -- and delete `/usr/allay/translators/alicorn.lua`.
+  { ALICORN_BASE .. "/init.lua",               "/usr/allay/translators/alicorn.lua" },
 }
 
 local DIRECTORIES = {
@@ -293,9 +293,9 @@ local function main()
                      dests = { "/usr/allay/lib/ui/init.lua" } },
         scout    = { version = "1.0.0", source = "allaycc/core",
                      dests = { "/usr/allay/lib/scout/init.lua" } },
-        ["allay-unicornpkg-compat"] = {
+        alicorn = {
           version = "1.0.0", source = "allaycc/core",
-          dests = { "/usr/allay/translators/unicornpkg.lua" },
+          dests = { "/usr/allay/translators/alicorn.lua" },
         },
       }
 

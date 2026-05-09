@@ -491,7 +491,17 @@ function commands.info(args)
     info(args.package)
     info("  status:       installed")
     info("  version:      " .. (installed.version or "?"))
+    if installed.description then
+      info("  description:  " .. installed.description)
+    end
     info("  source:       " .. (installed.source or "?"))
+    local lib_prefix = "/usr/allay/lib/" .. args.package .. "/"
+    for _, f in ipairs(installed.files or {}) do
+      if f.dest and f.dest:sub(1, #lib_prefix) == lib_prefix then
+        info("  library:      " .. lib_prefix)
+        break
+      end
+    end
     info("  manual:       " .. tostring(installed.manual))
     if installed.pinned then info("  pinned:       true") end
     info("  dependencies: " .. (#(installed.dependencies or {}) > 0
@@ -516,6 +526,9 @@ function commands.info(args)
   info("  author:       " .. (pkg.author or "(unknown)"))
   info("  license:      " .. (pkg.license or "(unspecified)"))
   info("  source:       " .. source.id)
+  if pkg.files and pkg.files.lib and next(pkg.files.lib) then
+    info("  library:      /usr/allay/lib/" .. args.package .. "/")
+  end
   if pkg.dependencies and #pkg.dependencies > 0 then
     info("  dependencies: " .. table.concat(pkg.dependencies, ", "))
   end

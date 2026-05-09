@@ -33,7 +33,7 @@ Sources are configured at `/etc/allay/sources.lua`. Add one with:
 
 allay supports HTTPS and floppy-disk sources out of the box. For rednet
 sources, install `allay-rednet-transport`. Packages in unicornpkg format
-work too (after `allay install allay-unicornpkg-compat`).
+work too (after `allay install alicorn`).
 
 ## Authoring
 
@@ -62,7 +62,7 @@ Related repos:
   rednet:// transport extension
 - [allay-server](https://github.com/allaycc/server) — rednet
   package host
-- [allay-unicornpkg-compat](https://github.com/allaycc/unicornpkg-compat) —
+- [alicorn](https://github.com/allaycc/alicorn) —
   read packages in unicornpkg's format
 
 ## Tests
