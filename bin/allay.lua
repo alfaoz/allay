@@ -151,46 +151,19 @@ function commands.install(args)
   local synthesized = {}
   local request_name = args.package
   if request_name:sub(1, #github.SCHEME) == github.SCHEME then
-    local pkg, source, info_data, err = with_spinner(
-      "walking " .. request_name,
-      function() return github.bundle(request_name, build_known(sources)) end)
-    if not pkg then
-      fail("error: " .. (err or "github bundle failed"))
+    -- Cheap pass: trees + installer-name check. Avoids the slow per-file
+    -- require-scan when we're going to run the installer anyway.
+    local peek, peek_err = with_spinner(
+      "checking " .. request_name,
+      function() return github.peek_installer(request_name) end)
+    if not peek then
+      fail("error: " .. (peek_err or "github peek failed"))
       return
     end
 
-    info(string.format("Bundle: %s (%d files, %d deps detected)",
-      info_data.repo, info_data.total_files, #info_data.detected_deps))
-    if #info_data.unresolved > 0 then
-      warn("Unresolved require()s (will not be auto-installed):")
-      for _, n in ipairs(info_data.unresolved) do
-        warn("  - " .. n)
-      end
-      warn("If these are needed, install them yourself before this package is loaded.")
-    end
-
-    -- Look for an installer file at the root of the bundled source. If we
-    -- find one, the user gets a choice: run it through observe (allay
-    -- tracks every file it writes and the package becomes manageable
-    -- like any other), or fall back to scout's bare-source bundle.
-    local installer_src, installer_path
-    if info_data.fetch_cache then
-      local candidates = {
-        "vim_installer.lua", "install.lua", "installer.lua",
-        "setup.lua", pkg.name .. "_installer.lua",
-      }
-      for _, cand in ipairs(candidates) do
-        if info_data.fetch_cache[cand] then
-          installer_src = info_data.fetch_cache[cand]
-          installer_path = cand
-          break
-        end
-      end
-    end
-
-    if installer_src then
+    if peek.installer then
       info("")
-      info("↳ detected installer: " .. installer_path)
+      info("↳ detected installer: " .. peek.installer.path)
       info("  this repo ships its own installer. allay can run it for you")
       info("  and track every file it writes — you'll get install / update /")
       info("  remove / list support like a normal package.")
@@ -202,7 +175,7 @@ function commands.install(args)
       local choice
       if args.flags.yes then
         choice = "installer"
-      elseif confirm("Run the installer (Y) or use scout's bundle (n)?",
+      elseif confirm("Run the installer (Y) or scan the source bundle instead (n)?",
                      { default = true }) then
         choice = "installer"
       else
@@ -210,15 +183,18 @@ function commands.install(args)
       end
 
       if choice == "installer" then
+        local pkg_name = peek.repo:lower():gsub("[^%w%-_%.]", "-")
         local result, run_err = installer.install_via_observed(lock, {
-          name = pkg.name,
-          installer_src = installer_src,
-          installer_path = installer_path,
+          name = pkg_name,
+          installer_src = peek.installer.source,
+          installer_path = peek.installer.path,
           source_id = request_name,
-          version = pkg.version or "0.0.0",
-          description = pkg.description,
+          version = peek.ref or "0.0.0",
+          description = string.format(
+            "Installed via %s from %s/%s@%s.",
+            peek.installer.path, peek.user, peek.repo, peek.ref),
           manual = true,
-          inferred_deps = info_data.detected_deps or {},
+          inferred_deps = {},
         })
         if not result then
           fail("error: " .. run_err)
@@ -236,6 +212,29 @@ function commands.install(args)
           result.tofu_count, result.tofu_count == 1 and "" or "s"))
         return
       end
+    end
+
+    -- No installer, or user opted for scout: do the full bundle (require
+    -- scan + per-file fetches). Reuses the tree we already pulled.
+    local pkg, source, info_data, err = with_spinner(
+      "walking " .. request_name,
+      function()
+        return github.bundle(request_name, build_known(sources),
+                             { tree = peek.tree })
+      end)
+    if not pkg then
+      fail("error: " .. (err or "github bundle failed"))
+      return
+    end
+
+    info(string.format("Bundle: %s (%d files, %d deps detected)",
+      info_data.repo, info_data.total_files, #info_data.detected_deps))
+    if #info_data.unresolved > 0 then
+      warn("Unresolved require()s (will not be auto-installed):")
+      for _, n in ipairs(info_data.unresolved) do
+        warn("  - " .. n)
+      end
+      warn("If these are needed, install them yourself before this package is loaded.")
     end
 
     synthesized[pkg.name] = {
